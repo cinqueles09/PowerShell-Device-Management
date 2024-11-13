@@ -1,3 +1,10 @@
+# Autor: Ismael Morilla
+# Versión: 1.0
+# Fecha: 31/10/2024
+# Descripción:Este script automatiza el proceso de revisión del atributo extensionAttribute de un usuario en el entorno local (on-premise) 
+#             y asigna este valor al dispositivo correspondiente como una propiedad. 
+#             Esta acción permite sincronizar y asociar información adicional del usuario con el dispositivo de manera eficiente
+
 #Connect-MgGraph -Identity -ClientId $clientId -Scopes Directory.ReadWrite.All
 
 $Devices = Get-MgDevice -All | Where-Object {$_.TrustType -ne "Workplace"} | Select-Object id, DisplayName
