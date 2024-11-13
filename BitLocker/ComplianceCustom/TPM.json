@@ -1,0 +1,23 @@
+{
+    "Rules":[ 
+        { 
+           "SettingName":"TPMAuth",
+           "Operator":"IsEquals",
+           "DataType":"String",
+           "Operand":"TpmPin",
+           "MoreInfoUrl":"https://bing.com",
+           "RemediationStrings":[ 
+              {
+                 "Language": "en_US",
+                 "Title": "TPM Pin must be enabled.",
+                 "Description": "TPM Pin must be enabled. Please refer to the link above"
+              },
+              {
+                 "Language": "es_Es",
+                 "Title": "TPM Pin debe estar habilitado",
+                 "Description": "El PIN TPM debe estar habilitado. Por favor consulte el enlace de arriba"
+              }
+           ]
+        }
+     ]
+    }
