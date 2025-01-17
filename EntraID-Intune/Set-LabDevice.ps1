@@ -1,3 +1,8 @@
+# Autor: Ismael Morilla
+# version: 1.0
+# Fecha: 17/01/2025
+# Descripción: Buscar que aplicaciones específicas tiene instalada un dispositivo y etiquetarlo en el extensionAttributeX
+
 #Conexión a Graph
 Connect-MgGraph -Scopes "DeviceManagementApps.Read.All DeviceManagementManagedDevices.ReadWrite.All Directory.ReadWrite.All"
 
