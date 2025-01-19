@@ -1,17 +1,41 @@
-# Autor: Ismael Morilla
-# Versión: 1.0
-# Fecha: 11/07/2024
-# Descripción: Este script automatiza el proceso de gestión de licencias de usuario en Microsoft 365. Permite eliminar una licencia existente de un usuario especificado y asignar una nueva licencia desde un listado definido en un archivo UPN.txt.
+<#
+.SYNOPSIS
+Cambia una licencia de usuario en Entra ID de una licencia especificada a otra.
 
-#Obtener el total de las UPN seleccionadas
-$total=(Get-Content .\UPN.txt | Measure-Object -line).lines
+.DESCRIPTION
+Este script permite a los administradores de TI reasignar licencias de usuario en Entra ID. 
+La licencia actual indicada se elimina y se reemplaza por otra especificada en el script.
 
-for ($var=1; $var -le $total; $var++) {
-    $UPN=Get-Content .\UPN.txt | select-object -First $var | Select-Object -last 1
+.OUTPUTS
+Mensaje de confirmación al realizar el cambio de licencia.
 
-    #Elimina la licencia E1
-    Set-MgUserLicense -UserId "$UPN" -RemoveLicenses @("") -AddLicenses @{}
-    #Asigna la licencia E3
-    Set-MgUserLicense -UserId "$UPN" -AddLicenses @{""} -RemoveLicenses @()
+.NOTES
+Autor      : Ismael Morilla Orellana
+Fecha      : [11/07/2024]
+Versión    : 1.0
+Revisión   : 1.0
 
+.EXAMPLES
+Ejemplo 1: Cambiar una licencia
+PS C:\> .\Switch-License.ps1 -OldLicense "E3" -NewLicense "E5"
+
+.LINK
+Repositorio: [https://github.com/TuUsuario/TuRepositorio]
+#>
+
+
+# Leer todas las UPN desde el archivo una vez y almacenar en una lista
+$UPNList = Get-Content .\UPN.txt
+
+# Obtener el total de UPN
+$total = $UPNList.Count
+
+# Iterar sobre la lista de UPN
+foreach ($UPN in $UPNList) {
+    # Elimina la licencia X
+    Set-MgUserLicense -UserId $UPN -RemoveLicenses @("") -AddLicenses @{}
+    
+    # Asigna la licencia X
+    Set-MgUserLicense -UserId $UPN -AddLicenses @{""} -RemoveLicenses @()
 }
+
