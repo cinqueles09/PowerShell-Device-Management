@@ -3,6 +3,30 @@
 # Fecha: 25/05/2024
 # Descripción: Este script automatiza la recopilación de información de dispositivos en Intune y utiliza un archivo CSV para obtener el último inicio de sesión de cada dispositivo.
 
+<#
+.SYNOPSIS
+Exportar información de AD e Intune
+
+.DESCRIPTION
+Este script automatiza la recopilación de información de dispositivos en Microsoft Intune utilizando un archivo CSV como entrada. 
+Extrae el último inicio de sesión de cada dispositivo, facilitando a los administradores de TI la auditoría y el monitoreo del estado de los dispositivos en su entorno
+
+.NOTES
+Autor      : Ismael Morilla Orellana
+Fecha      : 25/05/2024
+Versión    : 3.0
+Revisión   : 19/01/2025
+
+.EXAMPLES
+PS C:\> .\Export-DeviceLoginReport.ps1
+
+.LINK
+Repositorio: https://github.com/cinqueles09/PowerShell-Device-Management
+
+#>
+
+
+
 $lastLogonFile = Import-Csv -Path "lastlogon.csv"
 $Defenderfile  = Import-Csv -Path "Defender.csv"
 $Intunefile  = Import-Csv -Path "Intune.csv"
