@@ -27,3 +27,6 @@ Esta carpeta contiene scripts de PowerShell orientados a integrar y gestionar fu
 
 8. **Update-DeviceAttributes.ps1**
    - **Descripción:** Actualiza los atributos de extensión (ExtensionAttributes) de los dispositivos con valores obtenidos de los usuarios relacionados.
+
+9. **Cleanup-RegisteredDevices.ps1**
+   - **Descripción:** Este script se conecta a Microsoft Entra ID y obtiene una lista de dispositivos. Analiza cada dispositivo registrado para identificar aquellos que tienen más de 5 días de inactividad y que son de tipo "Microsoft Entra Joined" o "Microsoft Entra Hybrid". Si se encuentran dispositivos que cumplen con estos criterios, se preparan para su eliminación y se registra la información relevante en un informe.    
