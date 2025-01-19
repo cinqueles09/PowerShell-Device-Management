@@ -1,3 +1,8 @@
+# Autor: Ismael Morilla
+# Versión: 1.0
+# Fecha: 12/01/2024
+# Descripción: Recopilar datos de diagnosticos de los dispositivos referente a Intune y subirlo a un sitio de sharepoint
+
 ﻿Param (  
     $Tenant = "ywcff",  # tenant name
     $ClientID = "", # azure app client id 
