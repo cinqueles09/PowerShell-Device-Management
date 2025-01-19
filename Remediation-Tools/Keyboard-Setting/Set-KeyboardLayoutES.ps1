@@ -1,3 +1,8 @@
+# Autor: Ismael Morilla
+# Versión: 1.0
+# Fecha: 17/10/2024
+# Descripción: Establece el teclado en español
+
 New-WinUserLanguageList es-ES
 Set-WinUserLanguageList -LanguageList es-ES -Force
 
