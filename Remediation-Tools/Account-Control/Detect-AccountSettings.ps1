@@ -1,4 +1,7 @@
-# Script de PowerShell para obtener los valores de "Umbral de bloqueo", "Ventana de obs. de bloqueo" y "Duración de bloqueo"
+# Autor: Ismael Morilla
+# Versión: 1.0
+# Fecha: 11/11/2024
+# Descripción: Script de PowerShell para obtener los valores de "Umbral de bloqueo", "Ventana de obs. de bloqueo" y "Duración de bloqueo"
 
 # Ejecutar el comando 'net accounts' y almacenar el resultado
 $resultado = net accounts
