@@ -33,9 +33,9 @@ $total = $UPNList.Count
 # Iterar sobre la lista de UPN
 foreach ($UPN in $UPNList) {
     # Elimina la licencia X
-    Set-MgUserLicense -UserId $UPN -RemoveLicenses @("") -AddLicenses @{}
+    Set-MgUserLicense -UserId $UPN -RemoveLicenses @("[NombreLicencia]") -AddLicenses @{}
     
     # Asigna la licencia X
-    Set-MgUserLicense -UserId $UPN -AddLicenses @{""} -RemoveLicenses @()
+    Set-MgUserLicense -UserId $UPN -AddLicenses @{"[NombreLicencia]"} -RemoveLicenses @()
 }
 
