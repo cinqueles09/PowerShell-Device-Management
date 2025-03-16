@@ -170,7 +170,8 @@ Check-AdminPrivileges
 "======================================================" | Out-File -FilePath $logFilePath -Append
 
 # Ejecutar funciones y guardar en archivo sin sobrescribir
-info | Tee-Object -FilePath $logFilePath -Append
-task | Tee-Object -FilePath $logFilePath -Append
-logs | Tee-Object -FilePath $logFilePath -Append
-app | Tee-Object -FilePath $logFilePath -Append
+info
+task
+logs
+app
+
