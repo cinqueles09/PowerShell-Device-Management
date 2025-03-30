@@ -1,3 +1,20 @@
+<#
+.SYNOPSIS
+    Auditoría del entorno Intune.
+
+.DESCRIPTION
+    Este script está diseñado para realizar una revisión detallada de los aspectos más importantes de la configuración actual en Intune. 
+    Su objetivo es facilitar la identificación de configuraciones críticas y proporcionar un análisis que sirva como punto de partida para llevar a 
+    cabo una auditoría exhaustiva. Al evaluar la configuración existente, el script permite a los administradores y equipos de seguridad establecer 
+    un marco claro para las mejoras y optimizaciones necesarias en la gestión de dispositivos y aplicaciones.
+
+.NOTES
+    Author: Ismael Morilla Orellana
+    Date: 29/03/2025
+    Version: 1.0
+#>
+
+
 # Conectar a Microsoft Graph con permisos especificos
 #Connect-MgGraph -Scopes @(
 #    "DeviceManagementManagedDevices.Read.All",
