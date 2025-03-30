@@ -1,3 +1,18 @@
+<#
+.SYNOPSIS
+    Aperturas de fichero que se detecte del script de detección
+
+.DESCRIPTION
+    Este script se encargará de abrir de manera automatizada los archivos que fueron detectados por el script anterior.
+    Los archivos se abrirán en una ventana minimizada y permanecerán abiertos durante un periodo de 5 segundos antes de cerrarse automáticamente.
+
+.NOTES
+    Author: Ismael Morilla Orellana
+    Date: 29/03/2025
+    Version: 1.0
+#>
+
+
 $folderPath = "C:\Users\AdeleVance\Desktop\Test"  # Cambia esto por la ruta de la carpeta
 $timeLimit = (Get-Date).AddMinutes(-1)  # Tiempo límite de 1 minuto atrás
 
