@@ -1,3 +1,18 @@
+<#
+.SYNOPSIS
+    Revisión de fecha de apertura de los ficheros
+
+.DESCRIPTION
+    Este script tiene como objetivo revisar la fecha de apertura de un archivo específico y determinar si se encuentra actualmente abierto.
+    Si la fecha de apertura excede el umbral establecido, el script procederá a ejecutar un script de corrección diseñado para abordar la situación..
+
+.NOTES
+    Author: Ismael Morilla Orellana
+    Date: 29/03/2025
+    Version: 1.0
+#>
+
+
 $folderPath = "C:\Users\AdeleVance\Desktop\Test"  # Cambia esto por la ruta de la carpeta
 $handlePath = "C:\Sysinternals\handle.exe"  # Cambia esto por la ruta donde guardaste handle.exe
 
