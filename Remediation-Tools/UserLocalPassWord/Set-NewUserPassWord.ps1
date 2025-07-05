@@ -53,7 +53,6 @@ if ($User -eq $null) {
 # Configurar políticas de contraseña
 Write-Host "Configurando políticas de contraseña..."
 wmic useraccount where "name='$UserName'" set PasswordExpires=FALSE
-wmic useraccount where "name='$UserName'" set PasswordExpired=FALSE
 
 # Eliminar requerimiento de cambiar contraseña al iniciar sesión
 Write-Host "Eliminando requerimiento de cambio de contraseña al iniciar sesión..."
