@@ -31,4 +31,4 @@ Set-Service -Name "WbioSrvc" -StartupType Disabled
 $pinKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{D6886603-9D2F-4EB2-B667-1971041FA96B}"
 Remove-Item -Path $pinKey -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "Configuración de Windows Hello eliminada. Reinicia el equipo para aplicar los cambios."
+Write-Host "Configuracion de Windows Hello eliminada. Reinicia el equipo para aplicar los cambios."
