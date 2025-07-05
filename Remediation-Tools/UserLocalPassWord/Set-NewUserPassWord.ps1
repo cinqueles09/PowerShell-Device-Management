@@ -27,7 +27,7 @@
 # =====================
 # CONFIGURACIÓN
 # =====================
-$UserName = "StoreAdmin"
+$UserName = "Admin"
 $PasswordPlain = "PasswordNew"  # ← CAMBIA ESTA PASSWORD POR UNA SEGURA
 $SecurePassword = ConvertTo-SecureString $PasswordPlain -AsPlainText -Force
 
@@ -39,7 +39,7 @@ $User = Get-LocalUser -Name $UserName -ErrorAction SilentlyContinue
 
 if ($User -eq $null) {
     Write-Host "El usuario '$UserName' no existe. Creando..."
-    New-LocalUser -Name $UserName -Password $SecurePassword -FullName "Store Admin" -Description "Cuenta de administrador local"
+    New-LocalUser -Name $UserName -Password $SecurePassword -FullName "Admin" -Description "Cuenta de administrador local"
 
     # Obtener el grupo de administradores por SID (funciona en cualquier idioma)
     $adminGroup = Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }
