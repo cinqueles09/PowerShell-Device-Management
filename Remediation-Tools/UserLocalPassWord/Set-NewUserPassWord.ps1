@@ -24,12 +24,11 @@
     Requiere: PowerShell 5.1 o superior, permisos de administrador
 #>
 
-
 # =====================
 # CONFIGURACIÓN
 # =====================
-$UserName = "Admin"
-$PasswordPlain = "PasswordNew"  # ← CAMBIA ESTA CONTRASEÑA POR UNA SEGURA
+$UserName = "StoreAdmin"
+$PasswordPlain = "PasswordNew"  # ← CAMBIA ESTA PASSWORD POR UNA SEGURA
 $SecurePassword = ConvertTo-SecureString $PasswordPlain -AsPlainText -Force
 
 # =====================
@@ -46,20 +45,20 @@ if ($User -eq $null) {
     $adminGroup = Get-LocalGroup | Where-Object { $_.SID -eq "S-1-5-32-544" }
     Add-LocalGroupMember -Group $adminGroup.Name -Member $UserName
 } else {
-    Write-Host "El usuario '$UserName' ya existe. Cambiando contraseña..."
+    Write-Host "El usuario '$UserName' ya existe. Cambiando password..."
     Set-LocalUser -Name $UserName -Password $SecurePassword
 }
 
-# Configurar políticas de contraseña
-Write-Host "Configurando políticas de contraseña..."
+# Configurar políticas de password
+Write-Host "Configurando políticas de password..."
 wmic useraccount where "name='$UserName'" set PasswordExpires=FALSE
 
-# Eliminar requerimiento de cambiar contraseña al iniciar sesión
-Write-Host "Eliminando requerimiento de cambio de contraseña al iniciar sesión..."
+# Eliminar requerimiento de cambiar password al iniciar sesión
+Write-Host "Eliminando requerimiento de cambio de password al iniciar sesión..."
 try {
     net user $UserName /logonpasswordchg:no | Out-Null
 } catch {
-    Write-Warning "No se pudo establecer el cambio de contraseña al inicio de sesión."
+    Write-Warning "No se pudo establecer el cambio de password al inicio de sesión."
 }
 
 Write-Host "Proceso completado para el usuario '$UserName'."
