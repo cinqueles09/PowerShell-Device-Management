@@ -1,19 +1,38 @@
 <#
 .SYNOPSIS
-    Sincroniza contactos recientes de la GAL con los contactos personales de cada usuario en Microsoft 365.
+    Sincroniza automáticamente los contactos entre usuarios con licencia en Microsoft 365.
 
 .DESCRIPTION
-    - Autenticación mediante OAuth2 con credenciales de aplicación.
-    - Obtención de usuarios del tenant.
-    - Extracción de contactos recientes de la GAL (últimos 7 días).
-    - Comparación con contactos existentes para evitar duplicados.
-    - Creación de nuevos contactos solo si no existen previamente.
+    Este script utiliza Microsoft Graph API para:
+    - Autenticarse mediante client credentials.
+    - Obtener todos los usuarios de tipo "Member" con licencias asignadas.
+    - Leer los contactos existentes de cada usuario.
+    - Añadir como contactos a los demás usuarios con licencia, si aún no existen en su libreta.
 
-.NOTES
-    Autor: Ismael Morilla Orellana
+.NOTAS
+    Autor: Ismael Morilla
     Fecha: 21/07/2025
-    Versión: 1.1
+    Version: 1.2
+    Requisitos:
+        - Aplicación registrada en Azure AD con permisos de aplicación para `Contacts.ReadWrite` y `User.Read.All`.
+        - PowerShell 5.1+ o PowerShell Core.
+        - Módulo `Microsoft.Graph` no requerido, se usa `Invoke-RestMethod`.
+
+.PARAMETER tenantId
+    ID del inquilino de Azure AD.
+
+.PARAMETER clientId
+    ID de la aplicación registrada en Azure AD.
+
+.PARAMETER clientSecret
+    Secreto de cliente generado para la aplicación.
+
+.LIMITACIONES
+    - El script no maneja paginación de usuarios si hay más de 999.
+    - No se eliminan contactos obsoletos, solo se añaden nuevos.
+
 #>
+
 
 # Variables de autenticación
 $tenantId = ""
@@ -36,55 +55,76 @@ $headers = @{
     "Content-Type"  = "application/json"
 }
 
-# Obtener todos los usuarios del tenant
-$usersUrl = "https://graph.microsoft.com/v1.0/users?$select=id,userPrincipalName&$top=999"
+# Obtener todos los usuarios con licencia
+$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,userPrincipalName,assignedLicenses,mobilePhone,businessPhones&$top=999'
 $usuarios = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
-$usuarios = $usuarios.value
+$usuarios = $usuarios.value | Where-Object { $_.assignedLicenses.Count -gt 0 }
 
-# Obtener contactos de la GAL creados en los últimos 7 días
-$fechaLimite = (Get-Date).AddDays(-7)
-$contactosGAL = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails UserMailbox |
-    Where-Object { $_.WhenCreated -gt $fechaLimite } |
-    Select-Object DisplayName, PrimarySmtpAddress, Phone, MobilePhone
+function Get-AllUserContacts {
+    param (
+        [string]$userId,
+        [hashtable]$headers
+    )
 
-# Recorrer cada usuario y añadirle los contactos nuevos
+    $allContacts = @()
+    $url = "https://graph.microsoft.com/v1.0/users/$userId/contacts?\$top=999"
+
+    do {
+        $response = Invoke-RestMethod -Uri $url -Headers $headers -Method GET
+        $allContacts += $response.value
+        $url = $response.'@odata.nextLink'
+    } while ($url)
+
+    return @{ value = $allContacts }
+}
+
+
 foreach ($usuario in $usuarios) {
     $userId = $usuario.id
-    Write-Host "Procesando usuario: $($usuario.userPrincipalName)"
+    $userUPN = $usuario.userPrincipalName
+    Write-Host "`nProcesando libreta de: $userUPN"
 
-    # Obtener contactos existentes del usuario
-    $existingContactsUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts?$select=emailAddresses&$top=999"
-    $existingContacts = Invoke-RestMethod -Uri $existingContactsUrl -Headers $headers -Method GET
-    # Extraer todas las direcciones de correo existentes (en minúsculas para comparación)
+    # Obtener contactos existentes
+    #$existingContactsUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts?\$select=emailAddresses&\$top=999"
+    #$existingContacts = Invoke-RestMethod -Uri $existingContactsUrl -Headers $headers -Method GET
+
+    $existingContacts = Get-AllUserContacts -userId $userId -headers $headers
+
+    # Extraer correos existentes
     $existingEmails = @()
     foreach ($contact in $existingContacts.value) {
         foreach ($email in $contact.emailAddresses) {
-            $existingEmails += $email.address.ToLower()
+            if ($email.address) {
+                $existingEmails += $email.address.ToLower().Trim()
+            }
         }
     }
 
-    foreach ($contacto in $contactosGAL) {
-        $correo = $contacto.PrimarySmtpAddress.ToLower()
-        if ($existingEmails -notcontains $correo) {
-            $nuevoContacto = @{
-                givenName      = $contacto.DisplayName.Split(" ")[0]
-                surname        = $contacto.DisplayName.Split(" ")[-1]
-                emailAddresses = @(@{ address = $correo; name = $contacto.DisplayName })
-                businessPhones = @($contacto.Phone)
-                mobilePhone    = $contacto.MobilePhone
-            }
+    # Añadir contactos si no existen
+    foreach ($otroUsuario in $usuarios) {
+        if ($otroUsuario.userPrincipalName -ne $userUPN) {
+            $correo = $otroUsuario.userPrincipalName.ToLower().Trim()
+            if (-not ($existingEmails -contains $correo)) {
+                $nuevoContacto = @{
+                    givenName      = $otroUsuario.displayName.Split(" ")[0]
+                    surname        = $otroUsuario.displayName.Split(" ")[-1]
+                    emailAddresses = @(@{ address = $correo; name = $otroUsuario.displayName })
+                    businessPhones = $otroUsuario.businessPhones
+                    mobilePhone    = $otroUsuario.mobilePhone
+                }
 
-            $contactJson = $nuevoContacto | ConvertTo-Json -Depth 3
-            $contactUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts"
+                $contactJson = $nuevoContacto | ConvertTo-Json -Depth 3
+                $contactUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts"
 
-            try {
-                Invoke-RestMethod -Uri $contactUrl -Headers $headers -Method POST -Body $contactJson
-                Write-Host "Contacto nuevo: $($contacto.DisplayName) para $($usuario.userPrincipalName)"
-            } catch {
-                Write-Warning "Error para $($usuario.userPrincipalName): $_"
+                try {
+                    $null= Invoke-RestMethod -Uri $contactUrl -Headers $headers -Method POST -Body $contactJson
+                    Write-Host "Contacto nuevo: $($otroUsuario.displayName) → $userUPN"
+                } catch {
+                    Write-Warning "Error al crear contacto en $userUPN $_"
+                }
+            } else {
+                Write-Host "Ya existe contacto: $correo en $userUPN"
             }
-        } else {
-            Write-Host "Contacto ya existe: $correo para $($usuario.userPrincipalName)"
         }
     }
 }
