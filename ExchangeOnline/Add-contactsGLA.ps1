@@ -1,29 +1,19 @@
 <#
 .SYNOPSIS
-    Sincroniza contactos recientes de la GAL (Global Address List) con los contactos personales de cada usuario en Microsoft 365.
+    Sincroniza contactos recientes de la GAL con los contactos personales de cada usuario en Microsoft 365.
 
 .DESCRIPTION
-    Este script realiza las siguientes acciones:
-    - Autentica mediante OAuth2 usando credenciales de aplicación (Client Credentials Flow).
-    - Obtiene un token de acceso para Microsoft Graph API.
-    - Recupera todos los usuarios del tenant.
-    - Conecta con Exchange Online para obtener los contactos de la GAL creados en los últimos 7 días.
-    - Compara los contactos de la GAL con los contactos existentes de cada usuario.
-    - Añade los contactos nuevos a la libreta personal de cada usuario si no existen previamente.
-
-.REQUIREMENTS
-    - PowerShell 5.1 o superior.
-    - Módulo de Exchange Online Management instalado.
-    - Permisos adecuados en Azure AD para acceder a Microsoft Graph y Exchange Online.
-    - Valores válidos para $tenantId, $clientId y $clientSecret.
+    - Autenticación mediante OAuth2 con credenciales de aplicación.
+    - Obtención de usuarios del tenant.
+    - Extracción de contactos recientes de la GAL (últimos 7 días).
+    - Comparación con contactos existentes para evitar duplicados.
+    - Creación de nuevos contactos solo si no existen previamente.
 
 .NOTES
-    Autor: Ismael Morilla Orellana
+    Autor: [Tu Nombre]
     Fecha: 21/07/2025
-    Versión: 1.0
-
+    Versión: 1.1
 #>
-
 
 # Variables de autenticación
 $tenantId = ""
@@ -51,9 +41,6 @@ $usersUrl = "https://graph.microsoft.com/v1.0/users?$select=id,userPrincipalName
 $usuarios = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
 $usuarios = $usuarios.value
 
-# Conectar a Exchange Online para obtener contactos de la GAL
-#Connect-ExchangeOnline -AppId $clientId -CertificateThumbprint "" -Organization "TU_DOMINIO" -AccessToken $accessToken
-
 # Obtener contactos de la GAL creados en los últimos 7 días
 $fechaLimite = (Get-Date).AddDays(-7)
 $contactosGAL = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails UserMailbox |
@@ -68,7 +55,13 @@ foreach ($usuario in $usuarios) {
     # Obtener contactos existentes del usuario
     $existingContactsUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts?$select=emailAddresses&$top=999"
     $existingContacts = Invoke-RestMethod -Uri $existingContactsUrl -Headers $headers -Method GET
-    $existingEmails = $existingContacts.value.emailAddresses.address
+    # Extraer todas las direcciones de correo existentes (en minúsculas para comparación)
+    $existingEmails = @()
+    foreach ($contact in $existingContacts.value) {
+        foreach ($email in $contact.emailAddresses) {
+            $existingEmails += $email.address.ToLower()
+        }
+    }
 
     foreach ($contacto in $contactosGAL) {
         $correo = $contacto.PrimarySmtpAddress.ToLower()
