@@ -10,7 +10,7 @@
     - Creación de nuevos contactos solo si no existen previamente.
 
 .NOTES
-    Autor: [Tu Nombre]
+    Autor: Ismael Morilla Orellana
     Fecha: 21/07/2025
     Versión: 1.1
 #>
