@@ -63,7 +63,7 @@ $usuario = Invoke-RestMethod -Uri $userUrl -Headers $headers -Method GET
 
 # Obtener todos los usuarios con licencia (para comparar y añadir como contactos)
 $usuarios = @()
-$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,userPrincipalName,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&$top=999'
+$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,givenName,surname,userPrincipalName,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&$top=999'
 
 do {
     $response = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
@@ -108,8 +108,8 @@ foreach ($otroUsuario in $usuarios) {
     $surname = ($nombrePartes[1..($nombrePartes.Length - 1)] -join " ")
 
     $contactoData = @{
-        givenName      = $givenName
-        surname        = $surname
+        givenName      = $otroUsuario.givenName
+        surname        = $otroUsuario.surname
         displayName    = $otroUsuario.displayName
         emailAddresses = @(@{ address = $correo; name = $otroUsuario.displayName })
         businessPhones = $otroUsuario.businessPhones
