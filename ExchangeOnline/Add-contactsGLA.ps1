@@ -12,7 +12,7 @@
 .NOTAS
     Autor: Ismael Morilla
     Fecha: 21/07/2025
-    Version: 1.2
+    Version: 2.0
     Requisitos:
         - Aplicación registrada en Azure AD con permisos de aplicación para `Contacts.ReadWrite` y `User.Read.All`.
         - PowerShell 5.1+ o PowerShell Core.
@@ -55,10 +55,19 @@ $headers = @{
     "Content-Type"  = "application/json"
 }
 
-# Obtener todos los usuarios con licencia
-$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,userPrincipalName,assignedLicenses,mobilePhone,businessPhones&$top=999'
-$usuarios = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
-$usuarios = $usuarios.value | Where-Object { $_.assignedLicenses.Count -gt 0 }
+# Nueva paginación para obtener todos los usuarios del tenant sin limitación
+$usuarios = @()
+$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,givenName,surname,userPrincipalName,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&$top=999'
+
+do {
+    $response = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
+    $usuarios += $response.value | Where-Object {
+        $_.assignedLicenses.Count -gt 0 -and
+        $_.userPrincipalName -ne $targetUserUPN
+    }
+    $usersUrl = $response.'@odata.nextLink'
+} while ($usersUrl)
+
 
 function Get-AllUserContacts {
     param (
@@ -67,13 +76,13 @@ function Get-AllUserContacts {
     )
 
     $allContacts = @()
-    $url = "https://graph.microsoft.com/v1.0/users/$userId/contacts?\$top=999"
+    $contactsUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts?\$top=999"
 
     do {
-        $response = Invoke-RestMethod -Uri $url -Headers $headers -Method GET
+        $response = Invoke-RestMethod -Uri $contactsUrl -Headers $headers -Method GET
         $allContacts += $response.value
-        $url = $response.'@odata.nextLink'
-    } while ($url)
+        $contactsUrl = $response.'@odata.nextLink'
+    } while ($contactsUrl)
 
     return @{ value = $allContacts }
 }
@@ -85,45 +94,87 @@ foreach ($usuario in $usuarios) {
     Write-Host "`nProcesando libreta de: $userUPN"
 
     # Obtener contactos existentes
-    #$existingContactsUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts?\$select=emailAddresses&\$top=999"
-    #$existingContacts = Invoke-RestMethod -Uri $existingContactsUrl -Headers $headers -Method GET
+    $allContacts = (Get-AllUserContacts -userId $userId -headers $headers).value
 
-    $existingContacts = Get-AllUserContacts -userId $userId -headers $headers
-
-    # Extraer correos existentes
-    $existingEmails = @()
-    foreach ($contact in $existingContacts.value) {
+    # Crear diccionario de contactos existentes por email
+    $contactMap = @{}
+    foreach ($contact in $allContacts) {
         foreach ($email in $contact.emailAddresses) {
             if ($email.address) {
-                $existingEmails += $email.address.ToLower().Trim()
+                $correoKey = $email.address.ToLower().Trim()
+                if (-not $contactMap.ContainsKey($correoKey)) {
+                    $contactMap[$correoKey] = $contact.id
+                }
             }
         }
     }
 
-    # Añadir contactos si no existen
+    # Procesar usuarios
     foreach ($otroUsuario in $usuarios) {
-        if ($otroUsuario.userPrincipalName -ne $userUPN) {
-            $correo = $otroUsuario.userPrincipalName.ToLower().Trim()
-            if (-not ($existingEmails -contains $correo)) {
-                $nuevoContacto = @{
-                    givenName      = $otroUsuario.displayName.Split(" ")[0]
-                    surname        = $otroUsuario.displayName.Split(" ")[-1]
-                    emailAddresses = @(@{ address = $correo; name = $otroUsuario.displayName })
-                    businessPhones = $otroUsuario.businessPhones
-                    mobilePhone    = $otroUsuario.mobilePhone
-                }
+        $correo = $otroUsuario.userPrincipalName.ToLower().Trim()
+        if ($correo -ne $userUPN) {
+            $contactoData = @{
+                givenName      = if ($otroUsuario.givenName) { $otroUsuario.givenName } else { $otroUsuario.displayName.Split(" ")[0] }
+                surname        = if ($otroUsuario.surname)   { $otroUsuario.surname }   else { $otroUsuario.displayName.Split(" ")[-1] }
+                displayName    = $otroUsuario.displayName
+                emailAddresses = @(@{ address = $correo; name = $otroUsuario.displayName })
+                businessPhones = $otroUsuario.businessPhones
+                mobilePhone    = $otroUsuario.mobilePhone
+            }
 
-                $contactJson = $nuevoContacto | ConvertTo-Json -Depth 3
-                $contactUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts"
+            $contactJson = $contactoData | ConvertTo-Json -Depth 3
+            $utf8Json = [System.Text.Encoding]::UTF8.GetBytes($contactJson)
 
+            if ($contactMap.ContainsKey($correo)) {
+                # Actualizar contacto existente
+                $contactId = $contactMap[$correo]
+                $updateUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts/$contactId"
                 try {
-                    $null= Invoke-RestMethod -Uri $contactUrl -Headers $headers -Method POST -Body $contactJson
-                    Write-Host "Contacto nuevo: $($otroUsuario.displayName) → $userUPN"
+                    $null = Invoke-WebRequest -Uri $updateUrl -Headers $headers -Method PATCH -Body $utf8Json -ContentType "application/json" -UseBasicParsing
+                    Write-Host "Contacto actualizado: $($otroUsuario.displayName) > $userUPN"
+                } catch {
+                    Write-Warning "Error al actualizar contacto en $userUPN $_"
+                }
+            } else {
+                # Crear nuevo contacto
+                $createUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts"
+                try {
+                    $null = Invoke-WebRequest -Uri $createUrl -Headers $headers -Method POST -Body $utf8Json -ContentType "application/json" -UseBasicParsing
+                    Write-Host "Contacto nuevo: $($otroUsuario.displayName) > $userUPN"
+                    $contactMap[$correo] = "nuevo"
                 } catch {
                     Write-Warning "Error al crear contacto en $userUPN $_"
                 }
-            } else {
-                Write-Host "Ya existe contacto: $correo en $userUPN"
+            }
+        }
+    }
+
+    # Eliminar contactos duplicados por correo
+    $contactosPorCorreo = @{}
+    foreach ($contact in $allContacts) {
+        foreach ($email in $contact.emailAddresses) {
+            $correo = $email.address.ToLower().Trim()
+            if ($correo) {
+                if (-not $contactosPorCorreo.ContainsKey($correo)) {
+                    $contactosPorCorreo[$correo] = @($contact)
+                } else {
+                    $contactosPorCorreo[$correo] += $contact
+                }
+            }
+        }
+    }
+
+    foreach ($correo in $contactosPorCorreo.Keys) {
+        $duplicados = $contactosPorCorreo[$correo]
+        if ($duplicados.Count -gt 1) {
+            $duplicados[1..($duplicados.Count - 1)] | ForEach-Object {
+                $deleteUrl = "https://graph.microsoft.com/v1.0/users/$userId/contacts/$($_.id)"
+                try {
+                    $null = Invoke-RestMethod -Uri $deleteUrl -Headers $headers -Method DELETE
+                    Write-Host "Duplicado eliminado: $($_.displayName) <$correo>"
+                } catch {
+                    Write-Warning "Error al eliminar duplicado <$correo>: $_"
+                }
             }
         }
     }
