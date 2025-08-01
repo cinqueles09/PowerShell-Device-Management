@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Sincroniza usuarios con licencia de Microsoft Entra ID (Azure AD) y con extensionAttribute15 con valor 1 como contactos en la cuenta de Outlook de un usuario específico.
+    Sincroniza usuarios con licencia de Microsoft Entra ID (Azure AD) como contactos en la cuenta de Outlook de un usuario específico.
 
 .DESCRIPTION
     Este script utiliza Microsoft Graph API para:
