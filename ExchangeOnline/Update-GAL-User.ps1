@@ -49,7 +49,7 @@ $headers = @{
 }
 
 # Definir el UPN del usuario objetivo
-$targetUserUPN = "jmotero@mtorres.com"
+$targetUserUPN = ""
 
 # Obtener información del usuario específico
 $userUrl = "https://graph.microsoft.com/v1.0/users/$targetUserUPN"
