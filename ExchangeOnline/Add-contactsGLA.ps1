@@ -28,7 +28,6 @@
     Secreto de cliente generado para la aplicación.
 
 .LIMITACIONES
-    - El script no maneja paginación de usuarios si hay más de 999.
     - No se eliminan contactos obsoletos, solo se añaden nuevos.
 
 #>
