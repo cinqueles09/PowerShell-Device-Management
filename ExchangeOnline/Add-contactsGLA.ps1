@@ -9,7 +9,7 @@
     - Leer los contactos existentes de cada usuario.
     - Añadir como contactos a los demás usuarios con licencia, si aún no existen en su libreta.
 
-.NOTAS
+.NOTES
     Autor: Ismael Morilla
     Fecha: 21/07/2025
     Version: 2.0
