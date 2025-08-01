@@ -11,25 +11,16 @@
 
     Se asegura de mantener la codificación UTF-8 para preservar caracteres especiales como la "ñ".
 
-.AUTHOR
-    Ismael Morilla
-
-.DATE
-    28/07/2025
-
-.VERSION
-    2.0
-
-.REQUIREMENTS
-    - Permisos de aplicación en Microsoft Graph API: Contacts.ReadWrite, User.Read.All
-    - Registro de aplicación en Azure AD con client_id, client_secret y tenant_id
-    - PowerShell 5.1 o superior
-
 .NOTES
-    - Asegúrate de que el atributo personalizado `extensionAttribute15` esté configurado correctamente en los usuarios.
-    - El script evita duplicados comparando direcciones de correo electrónico.
-    - Se recomienda ejecutar este script de forma periódica para mantener los contactos sincronizados.
-
+    Autor: Ismael Morilla
+    Fecha: 28/07/2025
+    Version: 2.0
+    Requisitos:
+        - Aplicación registrada en Azure AD con permisos de aplicación para `Contacts.ReadWrite` y `User.Read.All`.
+        - PowerShell 5.1+ o PowerShell Core.
+        - Módulo `Microsoft.Graph` no requerido, se usa `Invoke-RestMethod`.
+        - Asegúrate de que el atributo personalizado `extensionAttribute15` esté configurado correctamente en los usuarios.
+        - El script evita duplicados comparando direcciones de correo electrónico.
 #>
 
 
