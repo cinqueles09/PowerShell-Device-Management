@@ -102,11 +102,6 @@ foreach ($contact in $allContacts) {
 foreach ($otroUsuario in $usuarios) {
     $correo = $otroUsuario.userPrincipalName.ToLower().Trim()
 
-    # Dividir nombre y apellidos
-    $nombrePartes = $otroUsuario.displayName.Split(" ")
-    $givenName = $nombrePartes[0]
-    $surname = ($nombrePartes[1..($nombrePartes.Length - 1)] -join " ")
-
     $contactoData = @{
         givenName      = $otroUsuario.givenName
         surname        = $otroUsuario.surname
