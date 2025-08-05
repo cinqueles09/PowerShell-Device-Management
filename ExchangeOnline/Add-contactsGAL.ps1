@@ -63,7 +63,7 @@ do {
     $usuarios += $response.value | Where-Object {
         $_.assignedLicenses.Count -gt 0 -and
         $_.userPrincipalName -ne $targetUserUPN
-    }
+    } | sort
     $usersUrl = $response.'@odata.nextLink'
 } while ($usersUrl)
 
