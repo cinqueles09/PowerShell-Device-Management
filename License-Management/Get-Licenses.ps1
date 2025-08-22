@@ -32,8 +32,19 @@ Connect-MgGraph -Scopes "User.Read.All"
 # Obtener todos los usuarios
 $users = Get-MgUser -All -Property Id,DisplayName,UserPrincipalName
 
+# Contador para barra de progreso
+$totalUsers = $users.Count
+$counter = 0
+
 # Crear un listado con las licencias de cada usuario
 $results = foreach ($user in $users) {
+    $counter++
+
+    # Mostrar progreso
+    Write-Progress -Activity "Obteniendo licencias de usuarios" `
+                   -Status "Procesando: $($user.DisplayName)" `
+                   -PercentComplete (($counter / $totalUsers) * 100)
+
     $licenses = Get-MgUserLicenseDetail -UserId $user.Id
     foreach ($license in $licenses) {
         [PSCustomObject]@{
