@@ -26,10 +26,6 @@
     # El archivo CSV se generará en la carpeta actual con el nombre "UserLicenses.csv"
 #>
 
-# =======================
-# Script: Get-M365UserLicenses.ps1
-# =======================
-
 # Conectar a Microsoft Graph
 Connect-MgGraph -Scopes "User.Read.All"
 
