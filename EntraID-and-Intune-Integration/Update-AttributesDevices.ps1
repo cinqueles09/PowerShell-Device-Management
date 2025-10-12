@@ -109,12 +109,12 @@ foreach ($user in $usuarios) {
                     Write-Warning "      Error actualizando el dispositivo $($device.displayName): $($_.Exception.Message)"
                 }
             }
+            Write-Host "--------------------------------"
         }
     }
     catch {
         Write-Warning "Error obteniendo dispositivos para $($user.displayName): $($_.Exception.Message)"
     }
-    Write-Host "--------------------------------"
 }
 
 # ==========================
