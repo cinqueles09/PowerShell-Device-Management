@@ -82,8 +82,8 @@ foreach ($user in $usuarios) {
             $ext4   = $extAtt.extensionAttribute4
 
             # Si el usuario es labvantage, extensionAttribute1 = "labvantage"
-            if ($user.displayName -eq "labvantage") {
-                $ext2 = "labvantage"
+            if ($user.userPrincipalName -like "LabVantage*") {
+                $ext2 = "LabVantage"
             }
 
             Write-Host "`nUsuario: $($user.displayName) [$($user.userPrincipalName)]"
