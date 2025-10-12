@@ -11,7 +11,7 @@
     Ismael Morilla Orellana (ismael.moore@outlook.es)
 
 .VERSION
-    1.0
+    1.0 (12/10/2025)
 
 .REQUIREMENTS
     - Permisos de aplicación en Azure AD para Microsoft Graph (User.Read.All, Device.ReadWrite.All)
