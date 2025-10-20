@@ -40,17 +40,26 @@ $Results = @()
 foreach ($path in $RegPaths) {
     Get-ChildItem $path -ErrorAction SilentlyContinue | ForEach-Object {
         $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+
         if ($props.DisplayName -match "Microsoft Office Professional Plus") {
             $name = $props.DisplayName
             $productCode = $_.PSChildName
             $productID = $props.ProductID
-            # Si ProductID no existe o parece un número de serie, asignar un valor genérico
+
+            # Asegurar que el ProductCode sea un GUID válido
+            if ($productCode -notmatch '^\{[0-9A-Fa-f\-]{36}\}$') {
+                # Saltar si no es un ProductCode válido
+                return
+            }
+
+            # Si ProductID no existe o parece un número de serie, asignar valor genérico
             if (-not $productID -or $productID -match '^\d{5}-\d{3}') {
                 $productID = "Office14.PROPLUS"
             }
+
             $Results += [PSCustomObject]@{
-                Name = $name
-                ProductID = $productID
+                Name        = $name
+                ProductID   = $productID
                 ProductCode = $productCode
             }
         }
