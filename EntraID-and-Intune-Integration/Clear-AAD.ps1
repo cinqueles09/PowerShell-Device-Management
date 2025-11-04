@@ -216,7 +216,7 @@ foreach ($device in $inactivosIntune_Ordenados) {
 }
 
 # Confirmar eliminacion
-$confirm = Read-Host "`n¿Deseas eliminar TODOS estos dispositivos inactivos de Intune y Entra ID? (S/N)"
+$confirm = Read-Host "`nDeseas eliminar TODOS estos dispositivos inactivos de Intune y Entra ID? (S/N)"
 
 if ($confirm -match "^[sS]$") {
     Write-Host "`nIniciando eliminacion de dispositivos inactivos..."
@@ -303,7 +303,7 @@ foreach ($device in $inactivosSoloAAD_Ordenados) {
 }
 
 # Confirmar eliminacion
-$confirm = Read-Host "`n¿Deseas eliminar estos dispositivos inactivos solo en Entra ID? (S/N)"
+$confirm = Read-Host "`nDeseas eliminar estos dispositivos inactivos solo en Entra ID? (S/N)"
 
 if ($confirm -match "^[sS]$") {
     Write-Host "`nIniciando eliminacion de dispositivos inactivos solo en Entra ID..."
