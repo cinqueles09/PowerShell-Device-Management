@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Exporta todas las GPO habilitadas del dominio a archivos XML legibles.
+    Exporta todas las GPO habilitadas del dominio a archivos XML legibles..
 
 .DESCRIPTION
     Este script recorre todas las GPO existentes en el dominio y genera un informe en formato XML
