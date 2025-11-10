@@ -3,7 +3,7 @@ name: Update README
 on:
   push:
     paths:
-      - 'Scripts/**'
+      - 'ActiveDirectory-Management/**'
   workflow_dispatch:
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     - name: Generate README.md
       shell: pwsh
       run: |
-        $scriptsPath = "Scripts"
+        $scriptsPath = "ActiveDirectory-Management"
         $readmePath = "README.md"
 
         $readmeContent = @"
