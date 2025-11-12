@@ -1,0 +1,92 @@
+name: Update Subfolder READMEs with Scripts
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'  # todos los días a las 05:00 UTC
+
+permissions:
+  contents: write
+
+jobs:
+  update-subreadmes:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate and update READMEs
+        run: |
+          echo "🔍 Buscando subcarpetas con scripts..."
+
+          EXCLUDE_DIRS=".git .github"
+
+          for dir in */ ; do
+            dir=${dir%/}
+            if [[ " $EXCLUDE_DIRS " =~ " $dir " ]]; then
+              continue
+            fi
+
+            # Buscar scripts en esa carpeta (solo en ese nivel)
+            scripts=$(find "$dir" -maxdepth 1 -type f \( -name "*.ps1" -o -name "*.py" -o -name "*.sh" -o -name "*.js" \) 2>/dev/null)
+
+            if [ -z "$scripts" ]; then
+              echo "🚫 No hay scripts en $dir"
+              continue
+            fi
+
+            echo "🧩 Actualizando README en $dir"
+
+            OUTPUT="### 📜 Scripts en ${dir}\n\n"
+
+            for file in $scripts; do
+              name=$(basename "$file")
+              desc=$(grep -i "description:" "$file" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
+              if [ -z "$desc" ]; then
+                desc="(sin descripción)"
+              fi
+              OUTPUT+="- **${name}** → ${desc}\n"
+            done
+
+            README="${dir}/README.md"
+
+            # Crear README si no existe
+            if [ ! -f "$README" ]; then
+              echo "# ${dir}" > "$README"
+              echo "" >> "$README"
+            fi
+
+            # Asegurar marcadores
+            START="<!-- SCRIPTS_SECTION_START -->"
+            END="<!-- SCRIPTS_SECTION_END -->"
+            if ! grep -q "$START" "$README"; then
+              echo -e "\n## 📜 Scripts\n$START\n$END" >> "$README"
+            fi
+
+            # Sustituir bloque entre marcadores
+            awk -v start="$START" -v end="$END" -v content="$OUTPUT" '
+              $0 ~ start {print; print content; skip=1; next}
+              $0 ~ end {skip=0}
+              !skip {print}
+            ' "$README" > temp && mv temp "$README"
+          done
+
+      - name: Commit and push if changed
+        run: |
+          git add */README.md
+          if git diff --cached --quiet; then
+            echo "✅ No hay cambios que guardar."
+            exit 0
+          fi
+          git commit -m "🔄 Actualización automática de los README de subcarpetas [skip ci]"
+          git push origin HEAD:main
