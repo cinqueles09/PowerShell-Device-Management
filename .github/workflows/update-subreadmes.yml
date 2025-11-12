@@ -1,31 +1,17 @@
-name: Update Subfolder READMEs with PowerShell Descriptions
+name: Test PowerShell Description Extraction
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-  schedule:
-    - cron: '0 5 * * *'  # todos los días a las 05:00 UTC
-
-permissions:
-  contents: write
+  workflow_dispatch:  # ejecución manual desde la pestaña "Actions"
 
 jobs:
-  update-subreadmes:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Update subfolder READMEs
+      - name: Detect subfolders and extract .DESCRIPTION
         run: |
           echo "🔍 Buscando subcarpetas con scripts PowerShell..."
           EXCLUDE_DIRS=".git .github"
@@ -34,26 +20,22 @@ jobs:
             dir="${dir%/}"
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
+            echo "📂 Carpeta: $dir"
             mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1")
+
             if [ ${#scripts[@]} -eq 0 ]; then
-              echo "🚫 No hay scripts en '$dir'"
+              echo "  🚫 No hay scripts en $dir"
               continue
             fi
 
-            echo "🧩 Actualizando README en '$dir'"
-
-            OUTPUT="### 📜 Scripts en ${dir}\n\n"
-
             for file in "${scripts[@]}"; do
-              name=$(basename "$file")
+              echo "  🧩 Script: $file"
 
-              # Extraer .DESCRIPTION usando Python seguro
+              # Extraer .DESCRIPTION usando Python de forma segura
               desc=$(python3 - "$file" <<'PYTHON'
 import re, sys
-
 file = sys.argv[1]
 desc = ""
-
 with open(file, "r", encoding="utf-8") as f:
     content = f.read()
     m = re.search(r"<#(.*?)#>", content, re.DOTALL)
@@ -62,44 +44,14 @@ with open(file, "r", encoding="utf-8") as f:
         m2 = re.search(r"(?i)\.DESCRIPTION\s*(.*?)(\n\s*\.|$)", block, re.DOTALL)
         if m2:
             desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
-
 print(desc.strip())
 PYTHON
  "$file")
 
-              [ -z "$desc" ] && desc="(sin descripción)"
-              OUTPUT+="- **${name}** → ${desc}\n"
+              if [ -z "$desc" ]; then
+                echo "    ⚠️  No se encontró descripción."
+              else
+                echo "    📄 Descripción: $desc"
+              fi
             done
-
-            README="${dir}/README.md"
-            START="<!-- SCRIPTS_SECTION_START -->"
-            END="<!-- SCRIPTS_SECTION_END -->"
-
-            # Crear README si no existe
-            if [ ! -f "$README" ]; then
-              echo "# ${dir}" > "$README"
-              echo "" >> "$README"
-            fi
-
-            # Crear marcadores si no existen
-            if ! grep -q "$START" "$README"; then
-              echo -e "\n## 📜 Scripts\n$START\n$END" >> "$README"
-            fi
-
-            # Sustituir bloque entre marcadores
-            awk -v start="$START" -v end="$END" -v content="$OUTPUT" '
-              $0 ~ start {print; print content; skip=1; next}
-              $0 ~ end {skip=0}
-              !skip {print}
-            ' "$README" > temp && mv temp "$README"
           done
-
-      - name: Commit and push if changed
-        run: |
-          git add */README.md
-          if git diff --cached --quiet; then
-            echo "✅ No hay cambios que guardar."
-            exit 0
-          fi
-          git commit -m "🔄 Actualización automática de README de subcarpetas con .DESCRIPTION [skip ci]"
-          git push origin HEAD:main
