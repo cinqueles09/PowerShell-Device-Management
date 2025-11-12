@@ -30,5 +30,5 @@ Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo sc
 
 ## 📜 Scripts disponibles
 <!-- SCRIPTS_SECTION_START -->
-## 📜 Scripts disponibles
+## 📜 Scripts detectados
 <!-- SCRIPTS_SECTION_END -->
