@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *' # Cada día a las 04:00 UTC
+    - cron: '0 4 * * *'
 
 permissions:
   contents: write
@@ -17,42 +17,51 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Git
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create Python extractor for .DESCRIPTION
+        shell: bash
         run: |
-          cat > /tmp/extract_desc.py <<'PY'
+          cat <<'PY' > /tmp/extract_desc.py
 #!/usr/bin/env python3
-import re, sys
-file = sys.argv[1]
-desc = ""
-try:
-    with open(file, "r", encoding="utf-8") as f:
-        content = f.read()
-        m = re.search(r"<#(.*?)#>", content, re.DOTALL)
-        if m:
-            block = m.group(1)
-            m2 = re.search(r"(?i)\\.DESCRIPTION\\s*(.*?)(\\n\\s*\\.|$)", block, re.DOTALL)
-            if m2:
-                desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
-except Exception as e:
-    sys.stderr.write(f"ERROR leyendo {file}: {e}\\n")
-print(desc.strip())
+import re
+import sys
+
+def extract_description(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        # Buscar bloque de comentarios <# ... #>
+        m = re.search(r"<#(.*?)#>", text, re.DOTALL)
+        if not m:
+            return ""
+        block = m.group(1)
+        # Buscar .DESCRIPTION (mayúsculas o minúsculas)
+        m2 = re.search(r"(?i)\.DESCRIPTION\s*(.*?)(\n\s*\.[A-Z]|$)", block, re.DOTALL)
+        if not m2:
+            return ""
+        desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
+        return desc.strip()
+    except Exception as e:
+        return f"(error al leer: {e})"
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        print(extract_description(sys.argv[1]))
 PY
           chmod +x /tmp/extract_desc.py
 
       - name: Update subfolder READMEs
+        shell: bash
         run: |
           echo "🔍 Buscando subcarpetas con scripts PowerShell..."
           EXCLUDE_DIRS=".git .github"
 
-          for dir in */ ; do
+          for dir in */; do
             dir="${dir%/}"
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
@@ -67,10 +76,8 @@ PY
 
             for script in "${scripts[@]}"; do
               name=$(basename "$script")
-              desc=$(/tmp/extract_desc.py "$script" 2>/dev/null)
-              if [ -z "$desc" ]; then
-                desc="(sin descripción)"
-              fi
+              desc=$(/tmp/extract_desc.py "$script")
+              [[ -z "$desc" ]] && desc="(sin descripción)"
               SECTION+="- **${name}** → ${desc}\n"
             done
 
@@ -78,7 +85,6 @@ PY
             END="<!-- SCRIPTS_SECTION_END -->"
             README="$dir/README.md"
 
-            # Crear README si no existe
             if [ ! -f "$README" ]; then
               echo "# $dir" > "$README"
               echo "" >> "$README"
@@ -87,7 +93,6 @@ PY
               echo "$END" >> "$README"
             fi
 
-            # Sustituir contenido entre marcadores
             awk -v start="$START" -v end="$END" -v content="$SECTION" '
               $0 ~ start {print; print content; skip=1; next}
               $0 ~ end {skip=0}
