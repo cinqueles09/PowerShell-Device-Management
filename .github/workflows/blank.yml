@@ -1,11 +1,11 @@
-name: Update README with Script Descriptions
+name: Update Root README with Folder Descriptions
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'  # diario a las 03:00 UTC
+    - cron: '0 4 * * *'  # Todos los días a las 04:00 UTC
 
 permissions:
   contents: write
@@ -25,46 +25,47 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Generate scripts list (recursive search)
+      - name: Generate modules list
         id: generate
         run: |
-          echo "🔍 Buscando scripts en el repositorio..."
-          OUTPUT="## 📜 Scripts detectados\n\n"
-          
-          # extensiones de scripts que queremos incluir
-          EXT="py sh js ts rb php"
-          # carpetas a excluir
-          EXCLUDE_DIRS=".git .github node_modules venv __pycache__"
+          echo "🧩 Generando listado de carpetas con README..."
+          OUTPUT="## 📚 Módulos del repositorio\n\n"
 
-          # Construir expresión de exclusión
-          EXCLUDES=$(printf "! -path './%s/*' " $EXCLUDE_DIRS)
+          # Excluir carpetas del sistema
+          EXCLUDE_DIRS=".git .github"
 
-          # Buscar scripts recursivamente
-          for ext in $EXT; do
-            for file in $(eval find . -type f -name "*.${ext}" $EXCLUDES 2>/dev/null); do
-              name=$(basename "$file")
-              relpath=${file#./}
-              # Extraer la descripción
-              desc=$(grep -i "description:" "$file" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
-              if [ -z "$desc" ]; then
-                desc="(sin descripción)"
-              fi
-              OUTPUT+="- **${relpath}** → ${desc}\n"
-            done
+          for dir in */ ; do
+            dir=${dir%/}
+            if [[ " $EXCLUDE_DIRS " =~ " $dir " ]]; then
+              continue
+            fi
+
+            # Saltar si no hay README en la carpeta
+            if [ ! -f "$dir/README.md" ]; then
+              continue
+            fi
+
+            # Extraer descripción: busca línea con "description:" o primer párrafo
+            desc=$(grep -i "description:" "$dir/README.md" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
+            if [ -z "$desc" ]; then
+              desc=$(awk 'NF {print; exit}' "$dir/README.md" | sed 's/^#* *//')
+            fi
+
+            # Si no hay descripción, poner marcador
+            if [ -z "$desc" ]; then
+              desc="(sin descripción)"
+            fi
+
+            OUTPUT+="- **${dir}** → ${desc}\n"
           done
 
-          if [ -z "$OUTPUT" ]; then
-            echo "⚠️ No se encontraron scripts."
-            OUTPUT="*(No se detectaron scripts con descripción)*"
-          fi
-
-          echo -e "$OUTPUT" > scripts_list.md
-          cat scripts_list.md
+          echo -e "$OUTPUT" > modules_list.md
+          cat modules_list.md
 
       - name: Update README section
         run: |
-          START="<!-- SCRIPTS_SECTION_START -->"
-          END="<!-- SCRIPTS_SECTION_END -->"
+          START="<!-- MODULES_SECTION_START -->"
+          END="<!-- MODULES_SECTION_END -->"
           README=README.md
 
           if [ ! -f "$README" ]; then
@@ -72,10 +73,10 @@ jobs:
           fi
 
           if ! grep -q "$START" "$README"; then
-            echo -e "\n## 📜 Scripts detectados\n$START\n$END" >> "$README"
+            echo -e "\n## 📚 Módulos del repositorio\n$START\n$END" >> "$README"
           fi
 
-          CONTENT=$(cat scripts_list.md)
+          CONTENT=$(cat modules_list.md)
 
           awk -v start="$START" -v end="$END" -v content="$CONTENT" '
             BEGIN {print_section=1}
@@ -91,5 +92,5 @@ jobs:
             echo "✅ No hay cambios para commitear."
             exit 0
           fi
-          git commit -m "🔄 Actualización automática del README con descripciones de scripts [skip ci]"
+          git commit -m "🔄 Actualización automática del README con descripciones de módulos [skip ci]"
           git push origin HEAD:main
