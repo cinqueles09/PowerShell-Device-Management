@@ -28,6 +28,14 @@ Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo sc
 
 ## 📚 Módulos del repositorio
 <!-- MODULES_SECTION_START -->
+- [**ActiveDirectory-Management**](ActiveDirectory-Management) → ActiveDirectory-Management
+- [**Audit-Management**](Audit-Management) → Audit-Management
+- [**BitLocker-Management**](BitLocker-Management) → BitLocker-Management
+- [**Device-Client-Management**](Device-Client-Management) → Device-Client-Management
+- [**EntraID-and-Intune-Integration**](EntraID-and-Intune-Integration) → EntraID-and-Intune-Integration
 - [**ExchangeOnline**](ExchangeOnline) → 📁 Libreta de Direcciones Corporativa (GAL Sync)
+- [**License-Management**](License-Management) → License-Management
 - [**Remediation-Tools**](Remediation-Tools) → Remediation-Tools
+- [**Reporting**](Reporting) → Reporting
+- [**WindowsHello-Management**](WindowsHello-Management) → WindowsHello-Management
 <!-- MODULES_SECTION_END -->
