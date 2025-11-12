@@ -28,8 +28,6 @@ Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo sc
 
 ## 📚 Módulos del repositorio
 <!-- MODULES_SECTION_START -->
-## 📚 Módulos del repositorio
-
-- **ExchangeOnline** → 📁 Libreta de Direcciones Corporativa (GAL Sync)
-- **Remediation-Tools** → Remediation-Tools
+- [**ExchangeOnline**](ExchangeOnline) → 📁 Libreta de Direcciones Corporativa (GAL Sync)
+- [**Remediation-Tools**](Remediation-Tools) → Remediation-Tools
 <!-- MODULES_SECTION_END -->
