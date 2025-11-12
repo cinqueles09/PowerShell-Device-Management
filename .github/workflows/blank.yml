@@ -1,32 +1,80 @@
-name: Update README
+name: Update README with Scripts Info
 
 on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # Se ejecuta todos los días a medianoche UTC
-  workflow_dispatch:      # Permite ejecutarlo manualmente
+    - cron: '0 3 * * *'  # Todos los días a las 03:00 UTC
+
+permissions:
+  contents: write
 
 jobs:
   update-readme:
     runs-on: ubuntu-latest
 
     steps:
-      # Trae el código del repositorio
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Configura Git para hacer commit
       - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Ejecuta un script que actualiza el README
-      - name: Update README
+      - name: Generate scripts list
+        id: generate
         run: |
-          echo "Actualizado automáticamente el $(date)" > README.md
+          echo "Generando listado de scripts..."
+          OUTPUT="## 📜 Scripts disponibles\n\n"
+          
+          # Busca todos los scripts dentro de la carpeta "scripts"
+          for file in $(find scripts -type f -name "*.py" -o -name "*.sh" 2>/dev/null); do
+            name=$(basename "$file")
+            # Intenta extraer la línea que contenga "description:"
+            desc=$(grep -i "description:" "$file" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
+            if [ -z "$desc" ]; then
+              desc="(sin descripción)"
+            fi
+            OUTPUT+="- **${name}** → ${desc}\n"
+          done
 
-      # Comprueba si hay cambios y hace commit + push
-      - name: Commit and Push changes
+          echo -e "$OUTPUT" > scripts_list.md
+          cat scripts_list.md
+
+      - name: Update README section
+        run: |
+          START="<!-- SCRIPTS_SECTION_START -->"
+          END="<!-- SCRIPTS_SECTION_END -->"
+          README=README.md
+
+          if [ ! -f "$README" ]; then
+            echo "# README generado automáticamente" > "$README"
+          fi
+
+          if ! grep -q "$START" "$README"; then
+            echo -e "\n## 📜 Scripts disponibles\n$START\n$END" >> "$README"
+          fi
+
+          CONTENT=$(cat scripts_list.md)
+
+          # Sustituye el contenido entre los marcadores
+          awk -v start="$START" -v end="$END" -v content="$CONTENT" '
+            BEGIN {print_section=1}
+            $0 ~ start {print; print content; print_section=0; next}
+            $0 ~ end {print; print_section=1; next}
+            print_section {print}
+          ' "$README" > temp && mv temp "$README"
+
+      - name: Commit and push if changed
         run: |
           git add README.md
-          git diff --quiet && echo "No hay cambios" || git commit -m "Actualización automática del README"
-          git push
+          if git diff --cached --quiet; then
+            echo "No hay cambios para commitear."
+            exit 0
+          fi
+          git commit -m "🔄 Actualización automática del README con scripts [skip ci]"
+          git push origin HEAD:main
