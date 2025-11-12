@@ -1,22 +1,35 @@
-name: Test PowerShell Description Extraction (robusto)
+name: Update Subfolder READMEs with Script Descriptions
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *' # Cada día a las 04:00 UTC
+
+permissions:
+  contents: write
 
 jobs:
-  test:
+  update-subreadmes:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Create temporary Python extractor
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create Python extractor for .DESCRIPTION
         run: |
           cat > /tmp/extract_desc.py <<'PY'
 #!/usr/bin/env python3
-import re
-import sys
+import re, sys
 file = sys.argv[1]
 desc = ""
 try:
@@ -29,13 +42,12 @@ try:
             if m2:
                 desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
 except Exception as e:
-    # Si hay error, lo imprimimos por stderr y devolvemos cadena vacía
-    sys.stderr.write(f'ERROR reading {file}: {e}\\n')
+    sys.stderr.write(f"ERROR leyendo {file}: {e}\\n")
 print(desc.strip())
 PY
           chmod +x /tmp/extract_desc.py
 
-      - name: Detect subfolders and extract .DESCRIPTION
+      - name: Update subfolder READMEs
         run: |
           echo "🔍 Buscando subcarpetas con scripts PowerShell..."
           EXCLUDE_DIRS=".git .github"
@@ -44,24 +56,53 @@ PY
             dir="${dir%/}"
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
-            echo "📂 Carpeta: $dir"
-            # find puede devolver nada; usamos array seguro
             mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1" 2>/dev/null)
-
             if [ ${#scripts[@]} -eq 0 ]; then
-              echo "  🚫 No hay scripts en $dir"
+              echo "🚫 No hay scripts en $dir"
               continue
             fi
 
-            for file in "${scripts[@]}"; do
-              echo "  🧩 Script: $file"
-              desc=$(/tmp/extract_desc.py "$file" 2>&1)
-              # Si el extractor devolvió algo en stderr, lo verá el log; tratamos la salida
-              # Para distinguir errores reales, podrías filtrar líneas que empiecen por 'ERROR'
+            echo "📂 Procesando carpeta: $dir"
+            SECTION=""
+
+            for script in "${scripts[@]}"; do
+              name=$(basename "$script")
+              desc=$(/tmp/extract_desc.py "$script" 2>/dev/null)
               if [ -z "$desc" ]; then
-                echo "    ⚠️  No se encontró descripción."
-              else
-                echo "    📄 Descripción: $desc"
+                desc="(sin descripción)"
               fi
+              SECTION+="- **${name}** → ${desc}\n"
             done
+
+            START="<!-- SCRIPTS_SECTION_START -->"
+            END="<!-- SCRIPTS_SECTION_END -->"
+            README="$dir/README.md"
+
+            # Crear README si no existe
+            if [ ! -f "$README" ]; then
+              echo "# $dir" > "$README"
+              echo "" >> "$README"
+              echo "## 📜 Scripts" >> "$README"
+              echo "$START" >> "$README"
+              echo "$END" >> "$README"
+            fi
+
+            # Sustituir contenido entre marcadores
+            awk -v start="$START" -v end="$END" -v content="$SECTION" '
+              $0 ~ start {print; print content; skip=1; next}
+              $0 ~ end {skip=0}
+              !skip {print}
+            ' "$README" > temp && mv temp "$README"
+
+            echo "✅ Actualizado: $dir/README.md"
           done
+
+      - name: Commit and push if changes exist
+        run: |
+          git add */README.md
+          if git diff --cached --quiet; then
+            echo "✅ No hay cambios que guardar."
+            exit 0
+          fi
+          git commit -m "🔄 Actualización automática de descripciones en subcarpetas [skip ci]"
+          git push origin HEAD:main
