@@ -1,0 +1,32 @@
+name: Update README
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Se ejecuta todos los días a medianoche UTC
+  workflow_dispatch:      # Permite ejecutarlo manualmente
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Trae el código del repositorio
+      - uses: actions/checkout@v4
+
+      # Configura Git para hacer commit
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Ejecuta un script que actualiza el README
+      - name: Update README
+        run: |
+          echo "Actualizado automáticamente el $(date)" > README.md
+
+      # Comprueba si hay cambios y hace commit + push
+      - name: Commit and Push changes
+        run: |
+          git add README.md
+          git diff --quiet && echo "No hay cambios" || git commit -m "Actualización automática del README"
+          git push
