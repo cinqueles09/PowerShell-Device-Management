@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'  # Todos los días a las 04:00 UTC
+    - cron: '0 4 * * *'
 
 permissions:
   contents: write
@@ -28,10 +28,9 @@ jobs:
       - name: Generate modules list
         id: generate
         run: |
-          echo "🧩 Generando listado de carpetas con README..."
-          OUTPUT="## 📚 Módulos del repositorio\n\n"
+          echo "🧩 Generando listado de módulos..."
+          OUTPUT=""
 
-          # Excluir carpetas del sistema
           EXCLUDE_DIRS=".git .github"
 
           for dir in */ ; do
@@ -40,23 +39,23 @@ jobs:
               continue
             fi
 
-            # Saltar si no hay README en la carpeta
+            # Si no tiene README, saltamos
             if [ ! -f "$dir/README.md" ]; then
               continue
             fi
 
-            # Extraer descripción: busca línea con "description:" o primer párrafo
+            # Intentar extraer descripción
             desc=$(grep -i "description:" "$dir/README.md" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
             if [ -z "$desc" ]; then
               desc=$(awk 'NF {print; exit}' "$dir/README.md" | sed 's/^#* *//')
             fi
-
-            # Si no hay descripción, poner marcador
             if [ -z "$desc" ]; then
               desc="(sin descripción)"
             fi
 
-            OUTPUT+="- **${dir}** → ${desc}\n"
+            # Crear enlace Markdown seguro (con espacios escapados)
+            link=$(echo "$dir" | sed 's/ /%20/g')
+            OUTPUT+="- [**${dir}**](${link}) → ${desc}\n"
           done
 
           echo -e "$OUTPUT" > modules_list.md
@@ -69,27 +68,28 @@ jobs:
           README=README.md
 
           if [ ! -f "$README" ]; then
-            echo "# README generado automáticamente" > "$README"
+            echo "# Repositorio de scripts" > "$README"
           fi
 
+          # Asegurar que existan los marcadores
           if ! grep -q "$START" "$README"; then
             echo -e "\n## 📚 Módulos del repositorio\n$START\n$END" >> "$README"
           fi
 
           CONTENT=$(cat modules_list.md)
 
+          # Sustituir solo el bloque entre marcadores (sin duplicar cabecera)
           awk -v start="$START" -v end="$END" -v content="$CONTENT" '
-            BEGIN {print_section=1}
-            $0 ~ start {print; print content; print_section=0; next}
-            $0 ~ end {print; print_section=1; next}
-            print_section {print}
+            $0 ~ start {print; print content; skip=1; next}
+            $0 ~ end {skip=0}
+            !skip {print}
           ' "$README" > temp && mv temp "$README"
 
       - name: Commit and push if changed
         run: |
           git add README.md
           if git diff --cached --quiet; then
-            echo "✅ No hay cambios para commitear."
+            echo "✅ No hay cambios que guardar."
             exit 0
           fi
           git commit -m "🔄 Actualización automática del README con descripciones de módulos [skip ci]"
