@@ -30,3 +30,11 @@ Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo sc
 <!-- SCRIPTS_SECTION_START -->
 ## 📜 Scripts detectados
 <!-- SCRIPTS_SECTION_END -->
+
+## 📚 Módulos del repositorio
+<!-- MODULES_SECTION_START -->
+## 📚 Módulos del repositorio
+
+- **ExchangeOnline** → 📁 Libreta de Direcciones Corporativa (GAL Sync)
+- **Remediation-Tools** → Remediation-Tools
+<!-- MODULES_SECTION_END -->
