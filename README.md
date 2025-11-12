@@ -25,3 +25,11 @@ El objetivo es mejorar la eficiencia, reducir la carga operativa y extender las 
 ## 🤝 Contribuciones
 
 Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo script, tu contribución puede ayudar a otros profesionales en el área. ¡Gracias por ser parte del proyecto!
+
+## 📚 Módulos del repositorio
+<!-- MODULES_SECTION_START -->
+## 📚 Módulos del repositorio
+
+- **ExchangeOnline** → 📁 Libreta de Direcciones Corporativa (GAL Sync)
+- **Remediation-Tools** → Remediation-Tools
+<!-- MODULES_SECTION_END -->
