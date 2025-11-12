@@ -31,10 +31,9 @@ jobs:
           EXCLUDE_DIRS=".git .github"
 
           for dir in */ ; do
-            dir="${dir%/}"  # quitar slash final
+            dir="${dir%/}"
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
-            # Buscar scripts PowerShell en la carpeta
             mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1")
             if [ ${#scripts[@]} -eq 0 ]; then
               echo "🚫 No hay scripts en '$dir'"
@@ -48,21 +47,22 @@ jobs:
             for file in "${scripts[@]}"; do
               name=$(basename "$file")
 
-              # Extraer .DESCRIPTION usando Python de manera segura
+              # Extraer .DESCRIPTION usando Python seguro
               desc=$(python3 - "$file" <<'PYTHON'
 import re, sys
+
 file = sys.argv[1]
 desc = ""
+
 with open(file, "r", encoding="utf-8") as f:
     content = f.read()
-    # Buscar bloque <# ... #>
     m = re.search(r"<#(.*?)#>", content, re.DOTALL)
     if m:
         block = m.group(1)
-        # Buscar .DESCRIPTION
         m2 = re.search(r"(?i)\.DESCRIPTION\s*(.*?)(\n\s*\.|$)", block, re.DOTALL)
         if m2:
             desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
+
 print(desc.strip())
 PYTHON
  "$file")
