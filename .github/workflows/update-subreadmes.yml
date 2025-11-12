@@ -31,10 +31,10 @@ jobs:
           EXCLUDE_DIRS=".git .github"
 
           for dir in */ ; do
-            dir="${dir%/}"  # quitar slash
+            dir="${dir%/}"  # quitar slash final
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
-            # Buscar scripts PowerShell
+            # Buscar scripts PowerShell en la carpeta
             mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1")
             if [ ${#scripts[@]} -eq 0 ]; then
               echo "🚫 No hay scripts en '$dir'"
@@ -48,12 +48,10 @@ jobs:
             for file in "${scripts[@]}"; do
               name=$(basename "$file")
 
-              # Extraer .DESCRIPTION usando Python
-desc=$(python3 - <<'PYTHON'
+              # Extraer .DESCRIPTION usando Python de manera segura
+              desc=$(python3 - "$file" <<'PYTHON'
 import re, sys
-
 file = sys.argv[1]
-
 desc = ""
 with open(file, "r", encoding="utf-8") as f:
     content = f.read()
@@ -62,19 +60,20 @@ with open(file, "r", encoding="utf-8") as f:
     if m:
         block = m.group(1)
         # Buscar .DESCRIPTION
-        m2 = re.search(r"(?i)\\.DESCRIPTION\\s*(.*?)(\\n\\s*\\.|$)", block, re.DOTALL)
+        m2 = re.search(r"(?i)\.DESCRIPTION\s*(.*?)(\n\s*\.|$)", block, re.DOTALL)
         if m2:
             desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
 print(desc.strip())
 PYTHON
  "$file")
 
-
               [ -z "$desc" ] && desc="(sin descripción)"
               OUTPUT+="- **${name}** → ${desc}\n"
             done
 
             README="${dir}/README.md"
+            START="<!-- SCRIPTS_SECTION_START -->"
+            END="<!-- SCRIPTS_SECTION_END -->"
 
             # Crear README si no existe
             if [ ! -f "$README" ]; then
@@ -83,8 +82,6 @@ PYTHON
             fi
 
             # Crear marcadores si no existen
-            START="<!-- SCRIPTS_SECTION_START -->"
-            END="<!-- SCRIPTS_SECTION_END -->"
             if ! grep -q "$START" "$README"; then
               echo -e "\n## 📜 Scripts\n$START\n$END" >> "$README"
             fi
