@@ -1,7 +1,7 @@
-name: Test PowerShell Description Extraction
+name: Test PowerShell Description Extraction (robusto)
 
 on:
-  workflow_dispatch:  # ejecución manual desde la pestaña "Actions"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -10,6 +10,30 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Create temporary Python extractor
+        run: |
+          cat > /tmp/extract_desc.py <<'PY'
+#!/usr/bin/env python3
+import re
+import sys
+file = sys.argv[1]
+desc = ""
+try:
+    with open(file, "r", encoding="utf-8") as f:
+        content = f.read()
+        m = re.search(r"<#(.*?)#>", content, re.DOTALL)
+        if m:
+            block = m.group(1)
+            m2 = re.search(r"(?i)\\.DESCRIPTION\\s*(.*?)(\\n\\s*\\.|$)", block, re.DOTALL)
+            if m2:
+                desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
+except Exception as e:
+    # Si hay error, lo imprimimos por stderr y devolvemos cadena vacía
+    sys.stderr.write(f'ERROR reading {file}: {e}\\n')
+print(desc.strip())
+PY
+          chmod +x /tmp/extract_desc.py
 
       - name: Detect subfolders and extract .DESCRIPTION
         run: |
@@ -21,7 +45,8 @@ jobs:
             [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
 
             echo "📂 Carpeta: $dir"
-            mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1")
+            # find puede devolver nada; usamos array seguro
+            mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1" 2>/dev/null)
 
             if [ ${#scripts[@]} -eq 0 ]; then
               echo "  🚫 No hay scripts en $dir"
@@ -30,24 +55,9 @@ jobs:
 
             for file in "${scripts[@]}"; do
               echo "  🧩 Script: $file"
-
-              # Extraer .DESCRIPTION usando Python de forma segura
-              desc=$(python3 - "$file" <<'PYTHON'
-import re, sys
-file = sys.argv[1]
-desc = ""
-with open(file, "r", encoding="utf-8") as f:
-    content = f.read()
-    m = re.search(r"<#(.*?)#>", content, re.DOTALL)
-    if m:
-        block = m.group(1)
-        m2 = re.search(r"(?i)\.DESCRIPTION\s*(.*?)(\n\s*\.|$)", block, re.DOTALL)
-        if m2:
-            desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
-print(desc.strip())
-PYTHON
- "$file")
-
+              desc=$(/tmp/extract_desc.py "$file" 2>&1)
+              # Si el extractor devolvió algo en stderr, lo verá el log; tratamos la salida
+              # Para distinguir errores reales, podrías filtrar líneas que empiecen por 'ERROR'
               if [ -z "$desc" ]; then
                 echo "    ⚠️  No se encontró descripción."
               else
