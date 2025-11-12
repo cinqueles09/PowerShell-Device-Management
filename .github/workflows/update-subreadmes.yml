@@ -25,48 +25,49 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Generate and update READMEs
+      - name: Update subfolder READMEs
         run: |
           echo "🔍 Buscando subcarpetas con scripts PowerShell..."
-
           EXCLUDE_DIRS=".git .github"
 
           for dir in */ ; do
-            dir=${dir%/}
-            if [[ " $EXCLUDE_DIRS " =~ " $dir " ]]; then
+            dir="${dir%/}"  # quitar slash
+            [[ " $EXCLUDE_DIRS " =~ " $dir " ]] && continue
+
+            # Buscar scripts PowerShell
+            mapfile -t scripts < <(find "$dir" -maxdepth 1 -type f -name "*.ps1")
+            if [ ${#scripts[@]} -eq 0 ]; then
+              echo "🚫 No hay scripts en '$dir'"
               continue
             fi
 
-            # Buscar scripts PowerShell en la carpeta
-            scripts=$(find "$dir" -maxdepth 1 -type f -name "*.ps1" 2>/dev/null)
-
-            if [ -z "$scripts" ]; then
-              echo "🚫 No hay scripts en $dir"
-              continue
-            fi
-
-            echo "🧩 Actualizando README en $dir"
+            echo "🧩 Actualizando README en '$dir'"
 
             OUTPUT="### 📜 Scripts en ${dir}\n\n"
 
-            for file in $scripts; do
+            for file in "${scripts[@]}"; do
               name=$(basename "$file")
 
-              # Extraer la sección .DESCRIPTION del encabezado <# ... #>
-              desc=$(awk '
-                BEGIN {capture=0; description=""}
-                /^\s*<#/ {capture=1; next}
-                /^\s*#>/ {capture=0; next}
-                capture && /^\s*\.DESCRIPTION/i {flag=1; next}
-                capture && flag {if ($0 ~ /^\s*\./) {flag=0} else {description=description $0 "\n"}}
-                END {gsub(/\n+$/, "", description); print description}
-              ' "$file")
+              # Extraer .DESCRIPTION usando Python
+              desc=$(python3 - <<PYTHON
+import re
+desc=""
+with open("$file", "r", encoding="utf-8") as f:
+    content = f.read()
+    # Buscar bloque entre <# ... #>
+    m = re.search(r"<#(.*?)#>", content, re.DOTALL)
+    if m:
+        block = m.group(1)
+        # Buscar línea que empiece con .DESCRIPTION
+        m2 = re.search(r"(?i)\\.DESCRIPTION\\s*(.*?)(\\n\\s*\\.|$)", block, re.DOTALL)
+        if m2:
+            # Limpiar saltos de línea innecesarios
+            desc = " ".join(line.strip() for line in m2.group(1).splitlines() if line.strip())
+print(desc.strip())
+PYTHON
+)
 
-              if [ -z "$desc" ]; then
-                desc="(sin descripción)"
-              fi
-
-              # Agregar al listado
+              [ -z "$desc" ] && desc="(sin descripción)"
               OUTPUT+="- **${name}** → ${desc}\n"
             done
 
@@ -78,7 +79,7 @@ jobs:
               echo "" >> "$README"
             fi
 
-            # Asegurar marcadores
+            # Crear marcadores si no existen
             START="<!-- SCRIPTS_SECTION_START -->"
             END="<!-- SCRIPTS_SECTION_END -->"
             if ! grep -q "$START" "$README"; then
@@ -87,4 +88,18 @@ jobs:
 
             # Sustituir bloque entre marcadores
             awk -v start="$START" -v end="$END" -v content="$OUTPUT" '
-              $0 ~ start {print; print co
+              $0 ~ start {print; print content; skip=1; next}
+              $0 ~ end {skip=0}
+              !skip {print}
+            ' "$README" > temp && mv temp "$README"
+          done
+
+      - name: Commit and push if changed
+        run: |
+          git add */README.md
+          if git diff --cached --quiet; then
+            echo "✅ No hay cambios que guardar."
+            exit 0
+          fi
+          git commit -m "🔄 Actualización automática de README de subcarpetas con .DESCRIPTION [skip ci]"
+          git push origin HEAD:main
