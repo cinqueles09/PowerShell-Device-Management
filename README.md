@@ -25,3 +25,8 @@ El objetivo es mejorar la eficiencia, reducir la carga operativa y extender las 
 ## 🤝 Contribuciones
 
 Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo script, tu contribución puede ayudar a otros profesionales en el área. ¡Gracias por ser parte del proyecto!
+
+## 📜 Scripts detectados
+<!-- SCRIPTS_SECTION_START -->
+## 📜 Scripts detectados
+<!-- SCRIPTS_SECTION_END -->
