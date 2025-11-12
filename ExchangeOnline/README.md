@@ -94,3 +94,18 @@ Automatizar la sincronización, actualización y limpieza de contactos corporati
 
 ---
 
+
+## 📜 Scripts
+<!-- SCRIPTS_SECTION_START -->
+### 📜 Scripts en ExchangeOnline
+
+- **Sync-M365UserContacts.ps1** → (sin descripción)
+- **RemoveContact-PerUser.ps1** → (sin descripción)
+- **Get-Contacts.ps1** → (sin descripción)
+- **Clean-AADContactsMasive.ps1** → (sin descripción)
+- **Add-contactsGAL.ps1** → (sin descripción)
+- **Remove-InvalidContacts.ps1** → (sin descripción)
+- **Delete-ContactsUser.ps1** → (sin descripción)
+- **Update-GAL-User.ps1** → (sin descripción)
+
+<!-- SCRIPTS_SECTION_END -->
