@@ -1,4 +1,4 @@
-name: Update Subfolder READMEs with Scripts
+name: Update Subfolder READMEs with PowerShell Descriptions
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate and update READMEs
         run: |
-          echo "🔍 Buscando subcarpetas con scripts..."
+          echo "🔍 Buscando subcarpetas con scripts PowerShell..."
 
           EXCLUDE_DIRS=".git .github"
 
@@ -37,8 +37,8 @@ jobs:
               continue
             fi
 
-            # Buscar scripts en esa carpeta (solo en ese nivel)
-            scripts=$(find "$dir" -maxdepth 1 -type f \( -name "*.ps1" -o -name "*.py" -o -name "*.sh" -o -name "*.js" \) 2>/dev/null)
+            # Buscar scripts PowerShell en la carpeta
+            scripts=$(find "$dir" -maxdepth 1 -type f -name "*.ps1" 2>/dev/null)
 
             if [ -z "$scripts" ]; then
               echo "🚫 No hay scripts en $dir"
@@ -51,10 +51,22 @@ jobs:
 
             for file in $scripts; do
               name=$(basename "$file")
-              desc=$(grep -i "description:" "$file" | head -n 1 | sed 's/^[# ]*description:[ ]*//I')
+
+              # Extraer la sección .DESCRIPTION del encabezado <# ... #>
+              desc=$(awk '
+                BEGIN {capture=0; description=""}
+                /^\s*<#/ {capture=1; next}
+                /^\s*#>/ {capture=0; next}
+                capture && /^\s*\.DESCRIPTION/i {flag=1; next}
+                capture && flag {if ($0 ~ /^\s*\./) {flag=0} else {description=description $0 "\n"}}
+                END {gsub(/\n+$/, "", description); print description}
+              ' "$file")
+
               if [ -z "$desc" ]; then
                 desc="(sin descripción)"
               fi
+
+              # Agregar al listado
               OUTPUT+="- **${name}** → ${desc}\n"
             done
 
@@ -75,18 +87,4 @@ jobs:
 
             # Sustituir bloque entre marcadores
             awk -v start="$START" -v end="$END" -v content="$OUTPUT" '
-              $0 ~ start {print; print content; skip=1; next}
-              $0 ~ end {skip=0}
-              !skip {print}
-            ' "$README" > temp && mv temp "$README"
-          done
-
-      - name: Commit and push if changed
-        run: |
-          git add */README.md
-          if git diff --cached --quiet; then
-            echo "✅ No hay cambios que guardar."
-            exit 0
-          fi
-          git commit -m "🔄 Actualización automática de los README de subcarpetas [skip ci]"
-          git push origin HEAD:main
+              $0 ~ start {print; print co
