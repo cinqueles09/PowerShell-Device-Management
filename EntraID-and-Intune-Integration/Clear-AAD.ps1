@@ -13,10 +13,7 @@
         3.  BLOQUE 1: Eliminación de dispositivos inactivos detectados en Intune y Entra ID (basado en fecha límite).
         4.  BLOQUE 1.1: Limpieza de objetos huérfanos que solo existen en Entra ID y superan la inactividad.
         5.  BLOQUE 2: Eliminación de huérfanos reales (sin registrationDateTime, sin Intune y no-Servidores).
-        6.  BLOQUE 3: Gestión de dispositivos "Registered" (Workplace) clasificados por:
-            - VDI (Prefijo MC): Filtrados por fecha de inactividad.
-            - Corporativos (PC, Portatil, TC, TL): Filtrados por fecha de inactividad.
-            - Personales: Identificados por exclusión (sin filtro de fecha).
+        6.  BLOQUE 3: Gestión de dispositivos "Registered" (Workplace)
         7.  BLOQUE 4: Análisis de coexistencia (Registered + MDM) para auditoría manual.
         8.  BLOQUE 5: Eliminación de duplicados en Intune por Número de Serie, preservando el registro con el lastSyncDateTime más reciente.
         9.  Exportación de reportes CSV para cada fase de limpieza (incluyendo análisis sin filtros).
