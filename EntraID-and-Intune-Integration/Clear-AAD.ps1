@@ -638,7 +638,7 @@ else {
         Write-Host "  [KEEP] -> $($aConservar.deviceName.PadRight(25)) | Sync: $($aConservar.lastSyncDateTime)" -ForegroundColor Green
         
         foreach ($d in $aEliminar) {
-            Write-Host "  [DEL]  -> $($d.deviceName.PadRight(25)) | Sync: $($d.lastSyncDateTime)" -ForegroundColor Gray
+            Write-Host "  [DEL]  -> $($d.deviceName.PadRight(25)) | Sync: $($d.lastSyncDateTime)" -ForegroundColor Red
             $duplicadosParaEliminar += $d
         }
         Write-Host "--------------------------------------------------------------------------------------------" -ForegroundColor Gray
