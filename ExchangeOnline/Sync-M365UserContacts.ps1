@@ -1,186 +1,178 @@
 <#
 .SYNOPSIS
-    Sincroniza contactos en Microsoft 365 para usuarios con extensionAttribute8 = "1".
+    Sincroniza los contactos de usuarios de Microsoft 365 con otros usuarios que tengan extensionAttribute15 = 1.
 
 .DESCRIPTION
-    Este script se conecta a Microsoft Graph API utilizando OAuth 2.0 (client credentials).
-    Realiza las siguientes acciones:
-      - Obtiene todos los usuarios de la organización.
-      - Identifica usuarios "destino" cuyo atributo onPremisesExtensionAttributes.extensionAttribute8 = "1".
-      - Construye la lista de "contactos" a partir de usuarios con licencia y teléfono definido.
-      - Para cada usuario destino:
-            * Crea nuevos contactos si no existen.
-            * Actualiza contactos ya existentes.
-            * Elimina contactos duplicados.
+    Este script obtiene todos los usuarios miembros con licencia en Azure AD y, para cada usuario cuyo
+    extensionAttribute15 esté configurado en 1, realiza las siguientes acciones:
+        - Crea o actualiza contactos basados en los demás usuarios con extensionAttribute15 = 1. [Editable]
+        - Elimina contactos duplicados del dominio @dominio.com. [Editable]
+        - Elimina contactos que ya no existen en Azure AD y que sean del dominio @dominio.com.
 
-.AUTHOR
-    Ismael Morilla Orellana
-
-.VERSION
-    1.0.0
-
-.REQUIREMENTS
-    - Permisos delegados o de aplicación en Azure AD:
-        * User.Read.All
-        * Contacts.ReadWrite
-    - PowerShell 5.1+ o PowerShell Core 7+
-    - No requiere módulos externos (usa Invoke-RestMethod / Invoke-WebRequest nativos)
-
-.USAGE
-    1. Editar las variables $clientId, $clientSecret y $tenantId con las credenciales de tu App Registration.
-    2. Ejecutar en PowerShell:
-        PS> .\Sync-M365UserContacts.ps1
-    3. Revisar en consola la salida con acciones ejecutadas (creación, actualización, eliminación de contactos).
+    El script utiliza Microsoft Graph API y requiere un registro de aplicación con permisos adecuados
+    (User.Read.All, Contacts.ReadWrite, etc.) en Azure AD para funcionar correctamente.
 
 .NOTES
-    Creación: 27/08/2025
-    Última actualización: 2025-09-02
+    Autor              : Seidor: Ismael Morilla Orellana
+    Fecha creación     : 2025-08-01
+    Fecha actualización: 2026-03-02
+    Versión            : 5.1 (con token dinámico)
+    Requisitos         : PowerShell 5.x o superior, conexión a Internet, credenciales de aplicación en Azure AD.
+    Observaciones      :
+        - Todas las llamadas a Graph API para crear/actualizar/eliminar contactos están comentadas (#)
+          para evitar modificaciones accidentales. Descomentar solo en entorno controlado.
+        - Se recomienda probar primero con un subconjunto de usuarios antes de ejecutar en producción.
+        - Mantener un registro de acciones o logs para trazabilidad es altamente recomendable.
+
+.EXAMPLE
+    # Ejecutar el script para sincronizar contactos
+    .\Sync-M365UserContacts.ps1
+
 #>
-# Variables de autenticación
-$clientId     = "<CLIENT_ID>"
-$clientSecret = "<CLIENT_SECRET>"
-$tenantId     = "<TENANT_ID>"
 
-# Obtener token de acceso
-$body = @{
-    grant_type    = "client_credentials"
-    scope         = "https://graph.microsoft.com/.default"
-    client_id     = $clientId
-    client_secret = $clientSecret
-}
-$tokenResponse = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" -Method POST -Body $body
-$accessToken = $tokenResponse.access_token
+# =============================
+# CONFIGURACIÓN PREVIA
+# =============================
+$tenantId = ""
+$clientId = ""
+$clientSecret = ""
 
-# Encabezados para Graph API
-$headers = @{
-    "Authorization" = "Bearer $accessToken"
-    "Content-Type"  = "application/json"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+
+# Función para normalizar texto (soluciona caracteres como ñ, í, etc.)
+function Get-NormalizedString {
+    param([string]$inputString)
+    if ([string]::IsNullOrWhiteSpace($inputString)) { return $inputString }
+    return [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes($inputString))
 }
 
-# --- Obtener todos los usuarios (para construir listas destino y contactos) ---
-$allUsers = @()
-$usersUrl = "https://graph.microsoft.com/v1.0/users?`$select=id,displayName,givenName,surname,userPrincipalName,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&`$top=999"
+# =============================
+# TOKEN DINÁMICO PARA GRAPH
+# =============================
+function Get-DynamicToken {
+    param([string]$TenantId, [string]$ClientId, [string]$ClientSecret)
+    if ($script:AccessToken -and ($script:TokenExpiry -gt (Get-Date))) { return $script:AccessToken }
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Renovando token..." -ForegroundColor Gray
+    $body = @{ grant_type = "client_credentials"; scope = "https://graph.microsoft.com/.default"; client_id = $ClientId; client_secret = $ClientSecret }
+    try {
+        $tokenResponse = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Method POST -Body $body
+        $script:AccessToken = $tokenResponse.access_token
+        $script:TokenExpiry = (Get-Date).AddSeconds($tokenResponse.expires_in - 300)
+    } catch { throw "Error al obtener token: $_" }
+    return $script:AccessToken
+}
+
+function Get-GraphHeaders {
+    param([string]$TenantId, [string]$ClientId, [string]$ClientSecret)
+    return @{ "Authorization" = "Bearer $(Get-DynamicToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret)"; "Content-Type" = "application/json; charset=utf-8" }
+}
+
+# =============================
+# OBTENER TODOS LOS USUARIOS MIEMBROS CON LICENCIA
+# =============================
+$headers = Get-GraphHeaders -TenantId $tenantId -ClientId $clientId -ClientSecret $clientSecret
+$usuariosMiembros = @()
+$usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,givenName,surname,userPrincipalName,mail,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&$top=999'
 
 do {
     $response = Invoke-RestMethod -Uri $usersUrl -Headers $headers -Method GET
-    $allUsers += $response.value
+    $usuariosMiembros += $response.value
     $usersUrl = $response.'@odata.nextLink'
 } while ($usersUrl)
 
-# --- Separar listas ---
-# 1. Usuarios destino → extensionAttribute8 = "1"
-$usuariosDestino = $allUsers | Where-Object {
-    $_.onPremisesExtensionAttributes.extensionAttribute8 -eq "1"
-}
+$usuariosObjetivo = $usuariosMiembros | Where-Object { $_.onPremisesExtensionAttributes.extensionAttribute15 -eq 1 }
+Write-Host "Usuarios objetivo encontrados: $($usuariosObjetivo.Count)" -ForegroundColor Cyan
 
-# 2. Lista de contactos → con licencia
-$usuariosContacto = $allUsers | Where-Object {
-    ($_.assignedLicenses.Count -gt 0) -and
-    ( -not [string]::IsNullOrEmpty($_.businessPhones) -or -not [string]::IsNullOrEmpty($_.mobilePhone) )
-}
-
-
-
-Write-Host "Usuarios destino encontrados: $($usuariosDestino.displayname.Count)"
-Write-Host "Usuarios contacto encontrados: $($usuariosContacto.Count)"
-
-# --- Procesar cada usuario destino ---
-foreach ($usuario in $usuariosDestino) {
-
-    Write-Host "`nProcesando usuario destino: $($usuario.displayName) <$($usuario.userPrincipalName)>"
-
-    # Obtener contactos existentes de este usuario
+# =============================
+# PROCESAR CADA USUARIO OBJETIVO
+# =============================
+foreach ($usuario in $usuariosObjetivo) {
+    Write-Host "Procesando usuario objetivo: $($usuario.displayName) <$($usuario.userPrincipalName)>" -ForegroundColor Magenta
+    $headers = Get-GraphHeaders -TenantId $tenantId -ClientId $clientId -ClientSecret $clientSecret
+    
     $allContacts = @()
     $contactsUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts?`$top=999"
-
     do {
         $response = Invoke-RestMethod -Uri $contactsUrl -Headers $headers -Method GET
         $allContacts += $response.value
         $contactsUrl = $response.'@odata.nextLink'
     } while ($contactsUrl)
 
-    # Crear diccionario de contactos existentes
     $contactMap = @{}
     foreach ($contact in $allContacts) {
         foreach ($email in $contact.emailAddresses) {
-            if ($email.address) {
-                $correoKey = $email.address.ToLower().Trim()
-                if (-not $contactMap.ContainsKey($correoKey)) {
-                    $contactMap[$correoKey] = $contact.id
-                }
-            }
+            if ($email.address) { $contactMap[$email.address.ToLower().Trim()] = $contact }
         }
     }
 
-    # Procesar lista de contactos
-    foreach ($otroUsuario in $usuariosContacto) {
-        # Evitar que un usuario se agregue a sí mismo
-        if ($otroUsuario.userPrincipalName -eq $usuario.userPrincipalName) { continue }
+    $otrosUsuarios = $usuariosMiembros | Where-Object { $_.assignedLicenses.Count -gt 0 -and $_.userPrincipalName -ne $usuario.userPrincipalName -and $_.onPremisesExtensionAttributes.extensionAttribute15 -eq 1 }
 
-        $correo = $otroUsuario.userPrincipalName.ToLower().Trim()
-
-        $contactoData = @{
+    # --- CREAR/ACTUALIZAR CONTACTOS ---
+    foreach ($otroUsuario in $otrosUsuarios) {
+        $correo = $otroUsuario.mail.ToLower().Trim()
+        $data = @{
             givenName      = $otroUsuario.givenName
             surname        = $otroUsuario.surname
-            displayName    = $otroUsuario.displayName
-            emailAddresses = @(@{ address = $correo; name = $otroUsuario.displayName })
             businessPhones = $otroUsuario.businessPhones
             mobilePhone    = $otroUsuario.mobilePhone
+            displayName    = $otroUsuario.displayName
         }
 
-        $contactJson = $contactoData | ConvertTo-Json -Depth 3
-        $utf8Json = [System.Text.Encoding]::UTF8.GetBytes($contactJson)
-
         if ($contactMap.ContainsKey($correo)) {
-            # Actualizar contacto existente
-            $contactId = $contactMap[$correo]
-            $updateUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$contactId"
-            try {
-                $null =Invoke-WebRequest -Uri $updateUrl -Headers $headers -Method PATCH -Body $utf8Json -ContentType "application/json" -UseBasicParsing | Out-Null
-                Write-Host "  - Contacto actualizado: $($otroUsuario.displayName)"
-            } catch {
-                Write-Warning "Error al actualizar contacto <$correo> en $($usuario.userPrincipalName) $_"
+            $c = $contactMap[$correo]
+            $cambiado = (Get-NormalizedString $c.givenName) -ne (Get-NormalizedString $data.givenName) -or 
+                        (Get-NormalizedString $c.surname) -ne (Get-NormalizedString $data.surname) -or 
+                        (Get-NormalizedString $c.displayName) -ne (Get-NormalizedString $data.displayName) -or
+                        ($c.mobilePhone -ne $data.mobilePhone) -or 
+                        (($c.businessPhones -join ',') -ne ($data.businessPhones -join ','))
+
+            if ($cambiado) {
+                $patchJson = $data | ConvertTo-Json -Depth 2
+                $null = Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method PATCH -Body ([System.Text.Encoding]::UTF8.GetBytes($patchJson)) -ContentType "application/json; charset=utf-8"
+                Write-Host "[!] Contacto actualizado: $($otroUsuario.displayName) <$correo>" -ForegroundColor Green
             }
         } else {
-            # Crear nuevo contacto
-            $createUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts"
-            try {
-                $null= Invoke-WebRequest -Uri $createUrl -Headers $headers -Method POST -Body $utf8Json -ContentType "application/json" -UseBasicParsing | Out-Null
-                Write-Host "  + Contacto nuevo: $($otroUsuario.displayName)"
-                $contactMap[$correo] = "nuevo"
-            } catch {
-                Write-Warning "Error al crear contacto <$correo> en $($usuario.userPrincipalName) $_"
-            }
+            $payload = @{ givenName=$data.givenName; surname=$data.surname; displayName=$data.displayName; emailAddresses=@(@{address=$correo; name=$data.displayName}); businessPhones=$data.businessPhones; mobilePhone=$data.mobilePhone }
+            $null = Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts" -Headers $headers -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 2))) -ContentType "application/json; charset=utf-8"
+            Write-Host "[v] Contacto nuevo creado: $($otroUsuario.displayName) <$correo>" -ForegroundColor Cyan
         }
     }
 
-    # Eliminar duplicados
+    # --- LIMPIAR DUPLICADOS ---
     $contactosPorCorreo = @{}
     foreach ($contact in $allContacts) {
         foreach ($email in $contact.emailAddresses) {
             $correo = $email.address.ToLower().Trim()
             if ($correo) {
-                if (-not $contactosPorCorreo.ContainsKey($correo)) {
-                    $contactosPorCorreo[$correo] = @($contact)
-                } else {
-                    $contactosPorCorreo[$correo] += $contact
-                }
+                if (-not $contactosPorCorreo.ContainsKey($correo)) { $contactosPorCorreo[$correo] = @($contact) }
+                else { $contactosPorCorreo[$correo] += $contact }
             }
         }
     }
 
     foreach ($correo in $contactosPorCorreo.Keys) {
-        $duplicados = $contactosPorCorreo[$correo]
-        if ($duplicados.Count -gt 1) {
-            $duplicados[1..($duplicados.Count - 1)] | ForEach-Object {
-                $deleteUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($_.id)"
-                try {
-                    $null=Invoke-RestMethod -Uri $deleteUrl -Headers $headers -Method DELETE | Out-Null
-                    Write-Host "  - Duplicado eliminado: $($_.displayName) <$correo>"
-                } catch {
-                    Write-Warning "Error al eliminar duplicado <$correo> en $($usuario.userPrincipalName) $_"
+        if ($correo -like "*@dominio.com") {
+            $duplicados = $contactosPorCorreo[$correo]
+            if ($duplicados.Count -gt 1) {
+                $duplicados[1..($duplicados.Count - 1)] | ForEach-Object {
+                    Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($_.id)" -Headers $headers -Method DELETE
+                    Write-Host "[X] Duplicado eliminado: $($_.displayName) <$correo>" -ForegroundColor Red
                 }
             }
         }
     }
+
+    # --- ELIMINAR CONTACTOS QUE YA NO EXISTEN EN AAD ---
+    $correosValidosAAD = $otrosUsuarios.mail | ForEach-Object { $_.ToLower().Trim() }
+    foreach ($correoExistente in $contactMap.Keys) {
+        if ($correoExistente -like "*@dominio.com" -and $correosValidosAAD -notcontains $correoExistente) {
+            $c = $contactMap[$correoExistente]
+            if ($c.id) {
+                Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
+                Write-Host "[X] Contacto eliminado (obsoleto): <$correoExistente>" -ForegroundColor Red
+            }
+        }
+    }
+    Write-Host "Finalizado usuario $($usuario.userPrincipalName)" -ForegroundColor DarkYellow
 }
