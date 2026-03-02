@@ -16,7 +16,7 @@
     Autor              : Seidor: Ismael Morilla Orellana
     Fecha creación     : 2025-08-01
     Fecha actualización: 2026-03-02
-    Versión            : 5.1 (con token dinámico)
+    Versión            : 5.2 (con token dinámico)
     Requisitos         : PowerShell 5.x o superior, conexión a Internet, credenciales de aplicación en Azure AD.
     Observaciones      :
         - Todas las llamadas a Graph API para crear/actualizar/eliminar contactos están comentadas (#)
@@ -40,20 +40,29 @@ $clientSecret = ""
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 
-# Función para normalizar texto (soluciona caracteres como ñ, í, etc.)
+# ==============================================================================
+# FUNCIONES DE APOYO
+# ==============================================================================
 function Get-NormalizedString {
     param([string]$inputString)
     if ([string]::IsNullOrWhiteSpace($inputString)) { return $inputString }
     return [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::Default.GetBytes($inputString))
 }
 
-# =============================
-# TOKEN DINÁMICO PARA GRAPH
-# =============================
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $color = switch ($Level) { "SUCCESS" { "Green" }; "WARN" { "Yellow" }; "ERROR" { "Red" }; "HEADER" { "Cyan" }; Default { "Gray" } }
+    Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $color
+}
+
+# ==============================================================================
+# AUTENTICACION
+# ==============================================================================
 function Get-DynamicToken {
     param([string]$TenantId, [string]$ClientId, [string]$ClientSecret)
     if ($script:AccessToken -and ($script:TokenExpiry -gt (Get-Date))) { return $script:AccessToken }
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Renovando token..." -ForegroundColor Gray
+    Write-Log "Autenticando en Microsoft Graph..." "HEADER"
     $body = @{ grant_type = "client_credentials"; scope = "https://graph.microsoft.com/.default"; client_id = $ClientId; client_secret = $ClientSecret }
     try {
         $tokenResponse = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Method POST -Body $body
@@ -68,10 +77,12 @@ function Get-GraphHeaders {
     return @{ "Authorization" = "Bearer $(Get-DynamicToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret)"; "Content-Type" = "application/json; charset=utf-8" }
 }
 
-# =============================
-# OBTENER TODOS LOS USUARIOS MIEMBROS CON LICENCIA
-# =============================
+# ==============================================================================
+# PROCESO PRINCIPAL
+# ==============================================================================
 $headers = Get-GraphHeaders -TenantId $tenantId -ClientId $clientId -ClientSecret $clientSecret
+Write-Log "Iniciando sincronizacion masiva de contactos..." "HEADER"
+
 $usuariosMiembros = @()
 $usersUrl = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Member''&$select=id,displayName,givenName,surname,userPrincipalName,mail,assignedLicenses,mobilePhone,businessPhones,onPremisesExtensionAttributes&$top=999'
 
@@ -82,15 +93,15 @@ do {
 } while ($usersUrl)
 
 $usuariosObjetivo = $usuariosMiembros | Where-Object { $_.onPremisesExtensionAttributes.extensionAttribute15 -eq 1 }
-Write-Host "Usuarios objetivo encontrados: $($usuariosObjetivo.Count)" -ForegroundColor Cyan
+Write-Log "Usuarios objetivo detectados: $($usuariosObjetivo.Count)" "HEADER"
 
-# =============================
-# PROCESAR CADA USUARIO OBJETIVO
-# =============================
 foreach ($usuario in $usuariosObjetivo) {
-    Write-Host "Procesando usuario objetivo: $($usuario.displayName) <$($usuario.userPrincipalName)>" -ForegroundColor Magenta
+    Write-Host "`n" + ("=" * 80) -ForegroundColor DarkGray
+    Write-Log "Procesando: $($usuario.displayName) ($($usuario.userPrincipalName))" "HEADER"
+    
     $headers = Get-GraphHeaders -TenantId $tenantId -ClientId $clientId -ClientSecret $clientSecret
     
+    # Obtener contactos
     $allContacts = @()
     $contactsUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts?`$top=999"
     do {
@@ -108,7 +119,7 @@ foreach ($usuario in $usuariosObjetivo) {
 
     $otrosUsuarios = $usuariosMiembros | Where-Object { $_.assignedLicenses.Count -gt 0 -and $_.userPrincipalName -ne $usuario.userPrincipalName -and $_.onPremisesExtensionAttributes.extensionAttribute15 -eq 1 }
 
-    # --- CREAR/ACTUALIZAR CONTACTOS ---
+    # --- SINCRONIZACION ---
     foreach ($otroUsuario in $otrosUsuarios) {
         $correo = $otroUsuario.mail.ToLower().Trim()
         $data = @{
@@ -129,50 +140,36 @@ foreach ($usuario in $usuariosObjetivo) {
 
             if ($cambiado) {
                 $patchJson = $data | ConvertTo-Json -Depth 2
-                $null = Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method PATCH -Body ([System.Text.Encoding]::UTF8.GetBytes($patchJson)) -ContentType "application/json; charset=utf-8"
-                Write-Host "[!] Contacto actualizado: $($otroUsuario.displayName) <$correo>" -ForegroundColor Green
+                $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method PATCH -Body ([System.Text.Encoding]::UTF8.GetBytes($patchJson)) -ContentType "application/json; charset=utf-8"
+                Write-Log "Actualizado: $($otroUsuario.displayName)" "SUCCESS"
             }
         } else {
             $payload = @{ givenName=$data.givenName; surname=$data.surname; displayName=$data.displayName; emailAddresses=@(@{address=$correo; name=$data.displayName}); businessPhones=$data.businessPhones; mobilePhone=$data.mobilePhone }
-            $null = Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts" -Headers $headers -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 2))) -ContentType "application/json; charset=utf-8"
-            Write-Host "[v] Contacto nuevo creado: $($otroUsuario.displayName) <$correo>" -ForegroundColor Cyan
+            $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts" -Headers $headers -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 2))) -ContentType "application/json; charset=utf-8"
+            Write-Log "Creado: $($otroUsuario.displayName)" "SUCCESS"
         }
     }
 
-    # --- LIMPIAR DUPLICADOS ---
-    $contactosPorCorreo = @{}
-    foreach ($contact in $allContacts) {
-        foreach ($email in $contact.emailAddresses) {
-            $correo = $email.address.ToLower().Trim()
-            if ($correo) {
-                if (-not $contactosPorCorreo.ContainsKey($correo)) { $contactosPorCorreo[$correo] = @($contact) }
-                else { $contactosPorCorreo[$correo] += $contact }
+    # --- LIMPIEZA ---
+    # --- A. LIMPIAR DUPLICADOS ---
+    $group = $allContacts | Group-Object { $_.emailAddresses[0].address.ToLower().Trim() }
+    foreach ($item in $group) {
+        if ($item.Count -gt 1) {
+            foreach ($duplicate in $item.Group[1..($item.Count - 1)]) {
+                Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($duplicate.id)" -Headers $headers -Method DELETE
+                Write-Log "Duplicado eliminado: $($duplicate.displayName)" "WARN"
             }
         }
     }
-
-    foreach ($correo in $contactosPorCorreo.Keys) {
-        if ($correo -like "*@dominio.com") {
-            $duplicados = $contactosPorCorreo[$correo]
-            if ($duplicados.Count -gt 1) {
-                $duplicados[1..($duplicados.Count - 1)] | ForEach-Object {
-                    Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($_.id)" -Headers $headers -Method DELETE
-                    Write-Host "[X] Duplicado eliminado: $($_.displayName) <$correo>" -ForegroundColor Red
-                }
-            }
-        }
-    }
-
-    # --- ELIMINAR CONTACTOS QUE YA NO EXISTEN EN AAD ---
-    $correosValidosAAD = $otrosUsuarios.mail | ForEach-Object { $_.ToLower().Trim() }
+    # --- B. LIMPIAR OBSOLETOS ---
     foreach ($correoExistente in $contactMap.Keys) {
-        if ($correoExistente -like "*@dominio.com" -and $correosValidosAAD -notcontains $correoExistente) {
+        if ($correoExistente -like "*@mtorres.com" -and ($otrosUsuarios.mail -notcontains $correoExistente)) {
             $c = $contactMap[$correoExistente]
             if ($c.id) {
-                Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
-                Write-Host "[X] Contacto eliminado (obsoleto): <$correoExistente>" -ForegroundColor Red
+                $null=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
+                Write-Log "Depurado (obsoleto): $correoExistente" "WARN"
             }
         }
     }
-    Write-Host "Finalizado usuario $($usuario.userPrincipalName)" -ForegroundColor DarkYellow
 }
+Write-Log "Proceso de sincronizacion finalizado con exito." "HEADER"
