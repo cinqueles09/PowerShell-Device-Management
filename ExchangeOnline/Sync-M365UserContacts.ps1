@@ -37,6 +37,7 @@ $tenantId = ""
 $clientId = ""
 $clientSecret = ""
 
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 
@@ -152,18 +153,39 @@ foreach ($usuario in $usuariosObjetivo) {
 
     # --- LIMPIEZA ---
     # --- A. LIMPIAR DUPLICADOS ---
-    $group = $allContacts | Group-Object { $_.emailAddresses[0].address.ToLower().Trim() }
-    foreach ($item in $group) {
-        if ($item.Count -gt 1) {
-            foreach ($duplicate in $item.Group[1..($item.Count - 1)]) {
-                Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($duplicate.id)" -Headers $headers -Method DELETE
-                Write-Log "Duplicado eliminado: $($duplicate.displayName)" "WARN"
+    # Primero filtramos solo contactos que tengan correo Y que pertenezcan a tu dominio
+    $contactosDominio = $allContacts | Where-Object { 
+        $_.emailAddresses.Count -gt 0 -and 
+        $_.emailAddresses[0].address -like "*@dominio.com" 
+    }
+
+    if ($contactosDominio) {
+        $group = $contactosDominio | Group-Object { $_.emailAddresses[0].address.ToLower().Trim() }
+        foreach ($item in $group) {
+            if ($item.Count -gt 1) {
+                # Mantenemos el primero, eliminamos el resto (del segundo en adelante)
+                foreach ($duplicate in $item.Group[1..($item.Count - 1)]) {
+                    $dupeEmail = $duplicate.emailAddresses[0].address
+                    $dupeName  = $duplicate.displayName
+                    
+                    try {
+                        Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($duplicate.id)" -Headers $headers -Method DELETE
+                        Write-Log "Duplicado eliminado: $dupeName <$dupeEmail>" "WARN"
+                    } catch {
+                        $errorMessage = $_.Exception.Message
+                        if ($_.Exception.Response.StatusCode.value__ -ne 404) {
+                            Write-Log "Error al eliminar duplicado $($dupeName): $errorMessage" "ERROR"
+                        } else {
+                            Write-Log "El duplicado $dupeName ya no existía (404 ignorado)" "INFO"
+                        }
+                    }
+                }
             }
         }
     }
     # --- B. LIMPIAR OBSOLETOS ---
     foreach ($correoExistente in $contactMap.Keys) {
-        if ($correoExistente -like "*@mtorres.com" -and ($otrosUsuarios.mail -notcontains $correoExistente)) {
+        if ($correoExistente -like "*@dominio.com" -and ($otrosUsuarios.mail -notcontains $correoExistente)) {
             $c = $contactMap[$correoExistente]
             if ($c.id) {
                 $null=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
@@ -171,5 +193,7 @@ foreach ($usuario in $usuariosObjetivo) {
             }
         }
     }
+}
+Write-Log "Proceso de sincronizacion finalizado con exito." "HEADER"
 }
 Write-Log "Proceso de sincronizacion finalizado con exito." "HEADER"
