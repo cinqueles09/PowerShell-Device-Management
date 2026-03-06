@@ -4,22 +4,22 @@
 
 .DESCRIPTION
     Este script obtiene todos los usuarios miembros con licencia en Azure AD y, para cada usuario cuyo
-    extensionAttribute15 esté configurado en 1, realiza las siguientes acciones:
-        - Crea o actualiza contactos basados en los demás usuarios con extensionAttribute15 = 1. [Editable]
-        - Elimina contactos duplicados del dominio @dominio.com. [Editable]
+    extensionAttribute15 este configurado en 1, realiza las siguientes acciones:
+        - Crea o actualiza contactos basados en los demas usuarios con extensionAttribute15 = 1.
+        - Elimina contactos duplicados del dominio @dominio.com.
         - Elimina contactos que ya no existen en Azure AD y que sean del dominio @dominio.com.
 
-    El script utiliza Microsoft Graph API y requiere un registro de aplicación con permisos adecuados
+    El script utiliza Microsoft Graph API y requiere un registro de aplicacion con permisos adecuados
     (User.Read.All, Contacts.ReadWrite, etc.) en Azure AD para funcionar correctamente.
 
 .NOTES
-    Autor              : Seidor: Ismael Morilla Orellana
-    Fecha creación     : 2025-08-01
-    Fecha actualización: 2026-03-02
-    Versión            : 5.2 (con token dinámico)
-    Requisitos         : PowerShell 5.x o superior, conexión a Internet, credenciales de aplicación en Azure AD.
+    Autor              : Ismael Morilla Orellana
+    Fecha creacion     : 2025-08-01
+    Fecha actualizacion: 2026-03-06
+    Version            : 5.1 (con token dinamico)
+    Requisitos         : PowerShell 5.x o superior, conexion a Internet, credenciales de aplicacion en Azure AD.
     Observaciones      :
-        - Todas las llamadas a Graph API para crear/actualizar/eliminar contactos están comentadas (#)
+        - Todas las llamadas a Graph API para crear/actualizar/eliminar contactos estan comentadas (#)
           para evitar modificaciones accidentales. Descomentar solo en entorno controlado.
         - Se recomienda probar primero con un subconjunto de usuarios antes de ejecutar en producción.
         - Mantener un registro de acciones o logs para trazabilidad es altamente recomendable.
@@ -30,13 +30,13 @@
 
 #>
 
-# =============================
-# CONFIGURACIÓN PREVIA
-# =============================
+# ==============================================================================
+# CONFIGURACIÓN (Asegúrate de que estas variables tengan valor en tu Automation Account)
+# ==============================================================================
+# Si usas Variables de Automation, descomenta las siguientes líneas:
 $tenantId = ""
 $clientId = ""
 $clientSecret = ""
-
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
@@ -102,14 +102,27 @@ foreach ($usuario in $usuariosObjetivo) {
     
     $headers = Get-GraphHeaders -TenantId $tenantId -ClientId $clientId -ClientSecret $clientSecret
     
-    # Obtener contactos
+    # Obtener contactos (CON CONTROL DE ERROR PARA EVITAR MailboxNotEnabledForRESTAPI)
     $allContacts = @()
     $contactsUrl = "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts?`$top=999"
-    do {
-        $response = Invoke-RestMethod -Uri $contactsUrl -Headers $headers -Method GET
-        $allContacts += $response.value
-        $contactsUrl = $response.'@odata.nextLink'
-    } while ($contactsUrl)
+    $skipUser = $false
+    try {
+        do {
+            $response = Invoke-RestMethod -Uri $contactsUrl -Headers $headers -Method GET -ErrorAction Stop
+            $allContacts += $response.value
+            $contactsUrl = $response.'@odata.nextLink'
+        } while ($contactsUrl)
+    } catch {
+        if ($_.Exception.Message -like "*MailboxNotEnabledForRESTAPI*") {
+            Write-Log "Saltando usuario: No tiene buzon en la nube o esta en local." "WARN"
+            $skipUser = $true
+        } else {
+            Write-Log "Error al obtener contactos: $($_.Exception.Message)" "ERROR"
+            $skipUser = $true
+        }
+    }
+
+    if ($skipUser) { continue }
 
     $contactMap = @{}
     foreach ($contact in $allContacts) {
@@ -122,6 +135,7 @@ foreach ($usuario in $usuariosObjetivo) {
 
     # --- SINCRONIZACION ---
     foreach ($otroUsuario in $otrosUsuarios) {
+        if (-not $otroUsuario.mail) { continue }
         $correo = $otroUsuario.mail.ToLower().Trim()
         $data = @{
             givenName      = $otroUsuario.givenName
@@ -141,19 +155,20 @@ foreach ($usuario in $usuariosObjetivo) {
 
             if ($cambiado) {
                 $patchJson = $data | ConvertTo-Json -Depth 2
-                $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method PATCH -Body ([System.Text.Encoding]::UTF8.GetBytes($patchJson)) -ContentType "application/json; charset=utf-8"
+                # AGREGADO -UseBasicParsing
+                $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method PATCH -Body ([System.Text.Encoding]::UTF8.GetBytes($patchJson)) -ContentType "application/json; charset=utf-8" -UseBasicParsing
                 Write-Log "Actualizado: $($otroUsuario.displayName)" "SUCCESS"
             }
         } else {
             $payload = @{ givenName=$data.givenName; surname=$data.surname; displayName=$data.displayName; emailAddresses=@(@{address=$correo; name=$data.displayName}); businessPhones=$data.businessPhones; mobilePhone=$data.mobilePhone }
-            $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts" -Headers $headers -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 2))) -ContentType "application/json; charset=utf-8"
+            # AGREGADO -UseBasicParsing
+            $null=Invoke-WebRequest -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts" -Headers $headers -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 2))) -ContentType "application/json; charset=utf-8" -UseBasicParsing
             Write-Log "Creado: $($otroUsuario.displayName)" "SUCCESS"
         }
     }
 
     # --- LIMPIEZA ---
     # --- A. LIMPIAR DUPLICADOS ---
-    # Primero filtramos solo contactos que tengan correo Y que pertenezcan a tu dominio
     $contactosDominio = $allContacts | Where-Object { 
         $_.emailAddresses.Count -gt 0 -and 
         $_.emailAddresses[0].address -like "*@dominio.com" 
@@ -163,37 +178,34 @@ foreach ($usuario in $usuariosObjetivo) {
         $group = $contactosDominio | Group-Object { $_.emailAddresses[0].address.ToLower().Trim() }
         foreach ($item in $group) {
             if ($item.Count -gt 1) {
-                # Mantenemos el primero, eliminamos el resto (del segundo en adelante)
                 foreach ($duplicate in $item.Group[1..($item.Count - 1)]) {
                     $dupeEmail = $duplicate.emailAddresses[0].address
                     $dupeName  = $duplicate.displayName
-                    
                     try {
                         Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($duplicate.id)" -Headers $headers -Method DELETE
                         Write-Log "Duplicado eliminado: $dupeName <$dupeEmail>" "WARN"
                     } catch {
-                        $errorMessage = $_.Exception.Message
                         if ($_.Exception.Response.StatusCode.value__ -ne 404) {
-                            Write-Log "Error al eliminar duplicado $($dupeName): $errorMessage" "ERROR"
-                        } else {
-                            Write-Log "El duplicado $dupeName ya no existía (404 ignorado)" "INFO"
+                            Write-Log "Error al eliminar duplicado $($dupeName): $($_.Exception.Message)" "ERROR"
                         }
                     }
                 }
             }
         }
     }
+
     # --- B. LIMPIAR OBSOLETOS ---
+    $correosValidosAAD = $otrosUsuarios.mail | ForEach-Object { $_.ToLower().Trim() }
     foreach ($correoExistente in $contactMap.Keys) {
-        if ($correoExistente -like "*@dominio.com" -and ($otrosUsuarios.mail -notcontains $correoExistente)) {
+        if ($correoExistente -like "*@dominio.com" -and $correosValidosAAD -notcontains $correoExistente) {
             $c = $contactMap[$correoExistente]
             if ($c.id) {
-                $null=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
-                Write-Log "Depurado (obsoleto): $correoExistente" "WARN"
+                try {
+                    $null=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/users/$($usuario.id)/contacts/$($c.id)" -Headers $headers -Method DELETE
+                    Write-Log "Depurado (obsoleto): $correoExistente" "WARN"
+                } catch {}
             }
         }
     }
-}
-Write-Log "Proceso de sincronizacion finalizado con exito." "HEADER"
 }
 Write-Log "Proceso de sincronizacion finalizado con exito." "HEADER"
