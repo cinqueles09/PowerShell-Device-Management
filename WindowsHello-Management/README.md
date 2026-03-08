@@ -1,4 +1,7 @@
 # 🔐 Windows Hello for Business Management
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
 
 Este directorio contiene herramientas especializadas para la auditoría, detección y eliminación controlada de configuraciones de **Windows Hello for Business (WHfB)** en estaciones de trabajo Windows 10/11.
 
