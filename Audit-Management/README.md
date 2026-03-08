@@ -3,6 +3,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
 [![Microsoft Graph](https://img.shields.io/badge/Microsoft%20Graph-API-573EBF?style=flat&logo=microsoftgraph&logoColor=white)](https://learn.microsoft.com/graph/overview)
 [![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Este directorio contiene herramientas de auditoría diseñadas para evaluar el estado de configuración de **Microsoft Intune**. El objetivo es proporcionar visibilidad sobre las configuraciones críticas de seguridad y cumplimiento en el entorno.
 
