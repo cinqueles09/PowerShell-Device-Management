@@ -1,41 +1,66 @@
-# PowerShell-Device-Management
+# PowerShell Device Management 🚀
 
-**Bienvenido a _PowerShell-Device-Management_**, un repositorio dedicado a scripts de PowerShell que facilitan la automatización de tareas administrativas y operativas que no están directamente disponibles a través de Microsoft Intune u otras herramientas MDM.
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
 
-El objetivo es mejorar la eficiencia, reducir la carga operativa y extender las capacidades de administración de dispositivos, usuarios y entornos de trabajo mediante automatización, integración y personalización.
+Conjunto de herramientas y scripts de **PowerShell** diseñados para optimizar la administración, diagnóstico y gestión de dispositivos en entornos empresariales, con especial enfoque en **Microsoft Intune** y **Microsoft Entra ID**.
 
-## ✨ Características
+## 📋 Descripción
 
-- **Automatización de tareas**: Scripts listos para reducir procesos manuales y repetitivos.
-- **Complemento para Intune**: Soluciones que amplían las funciones de Intune con más control y flexibilidad.
-- **Personalización adaptable**: Ajustes según los flujos de trabajo y necesidades específicas de cada entorno.
-- **Mantenimiento activo**: Actualizaciones frecuentes para seguir el ritmo de los cambios tecnológicos.
+Este repositorio centraliza scripts de automatización que permiten a los administradores de IT realizar tareas complejas de gestión de dispositivos de forma rápida y eficiente. Desde la extracción de hashes de hardware para Autopilot hasta la consulta de estados de cumplimiento mediante **Microsoft Graph API**.
 
-## 🚀 Cómo empezar
+## ✨ Características Principales
 
-1. **Explora los scripts**  
-   Revisa el repositorio y la documentación incluida en cada archivo para entender su propósito y aplicación.
+* **Automatización de Intune:** Scripts para interactuar con dispositivos gestionados y políticas.
+* **Diagnóstico Remoto:** Herramientas para recolectar logs y verificar el estado de salud del sistema.
+* **Reportes Dinámicos:** Generación de informes sobre el estado de la flota de dispositivos (Compliance, Enrolment, etc.).
+* **Gestión de Autopilot:** Facilita la obtención de Hardware IDs y la subida de dispositivos al servicio.
 
-2. **Implementa y personaliza**  
-   Adapta los scripts a las particularidades de tu entorno y necesidades operativas.
+## 🛠️ Requisitos Previos
 
-3. **Colabora y comparte**  
-   ¿Mejoraste un script o creaste uno nuevo? ¡Contribuye mediante un Pull Request y colabora con la comunidad!
+Antes de utilizar los scripts, asegúrate de cumplir con lo siguiente:
+
+1.  **Versión de PowerShell:** Compatible con PowerShell 5.1 o 7.x (Core).
+2.  **Módulos Necesarios:**
+    ```powershell
+    # Instala el SDK de Microsoft Graph si el script lo requiere
+    Install-Module Microsoft.Graph -Scope CurrentUser
+    ```
+3.  **Permisos:** Debes contar con roles de administrador (Intune Administrator / Cloud Device Administrator) en el tenant de destino.
+
+## 🚀 Instalación y Uso
+
+### 1. Clonar el repositorio
+```bash
+git clone [https://github.com/cinqueles09/PowerShell-Device-Management.git](https://github.com/cinqueles09/PowerShell-Device-Management.git)
+```
+
+### 2. Ejecución de Scripts
+
+Navega a la carpeta del script que necesites y ejecútalo. Recuerda ajustar la política de ejecución si es necesario para la sesión actual:
+
+```powershell
+# Permitir la ejecución de scripts locales en la sesión actual
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+
+# Ejecutar el script deseado
+.\NombreDelScript.ps1
+```
 
 ## 🤝 Contribuciones
 
-Toda aportación es bienvenida. Ya sea una mejora, una corrección o un nuevo script, tu contribución puede ayudar a otros profesionales en el área. ¡Gracias por ser parte del proyecto!
+¡Las contribuciones hacen que la comunidad de IT sea mejor! Para colaborar, sigue estos pasos:
 
-## 📚 Módulos del repositorio
-<!-- MODULES_SECTION_START -->
-- [**ActiveDirectory-Management**](ActiveDirectory-Management) → ActiveDirectory-Management
-- [**Audit-Management**](Audit-Management) → Audit-Management
-- [**BitLocker-Management**](BitLocker-Management) → BitLocker-Management
-- [**Device-Client-Management**](Device-Client-Management) → Device-Client-Management
-- [**EntraID-and-Intune-Integration**](EntraID-and-Intune-Integration) → EntraID-and-Intune-Integration
-- [**ExchangeOnline**](ExchangeOnline) → 📁 Libreta de Direcciones Corporativa (GAL Sync)
-- [**License-Management**](License-Management) → License-Management
-- [**Remediation-Tools**](Remediation-Tools) → Remediation-Tools
-- [**Reporting**](Reporting) → Reporting
-- [**WindowsHello-Management**](WindowsHello-Management) → WindowsHello-Management
-<!-- MODULES_SECTION_END -->
+1.  **Haz un Fork** del proyecto.
+2.  **Crea una rama** para tu mejora:  
+    `git checkout -b feature/NuevaMejora`
+3.  **Haz un Commit** de tus cambios:  
+    `git commit -m 'Añadida nueva funcionalidad'`
+4.  **Haz un Push** a la rama:  
+    `git push origin feature/NuevaMejora`
+5.  **Abre un Pull Request**.
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia **MIT**. 
