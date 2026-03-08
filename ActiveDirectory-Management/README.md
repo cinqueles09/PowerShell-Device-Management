@@ -1,4 +1,7 @@
 # 📂 Active Directory Management Scripts
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
 
 Este directorio contiene herramientas de **PowerShell** diseñadas para la administración avanzada, auditoría y automatización de objetos en **Active Directory Domain Services (AD DS)**.
 
