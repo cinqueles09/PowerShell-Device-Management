@@ -6,10 +6,16 @@ Este directorio contiene herramientas de **PowerShell** diseñadas para la admin
 
 Los scripts incluidos aquí están enfocados en simplificar las tareas diarias de un Administrador de Sistemas en entornos locales e híbridos:
 
-- **Gestión de Usuarios:** Automatización de altas, bajas y modificaciones masivas.
-- **Auditoría de Grupos:** Reportes de membresías y detección de grupos vacíos o críticos.
-- **Limpieza de AD (Housekeeping):** Identificación de equipos y usuarios inactivos o con contraseñas expiradas.
-- **Reportes de Seguridad:** Scripts para verificar el estado de cuentas privilegiadas y políticas de contraseñas.
+### 📋 Inventario de Scripts y Funcionalidades
+
+| Script | Descripción Principal | Salida / Output |
+| :--- | :--- | :--- |
+| **`Export-GPOsByOU`** | Analiza todas las OUs del dominio para listar GPOs vinculadas, estado de habilitación y si están forzadas (*Enforced*). | CSV (Separador `;`) |
+| **`Export-XML_GPo`** | Genera un informe detallado en formato XML para cada GPO del dominio. Incluye barra de progreso y manejo de caracteres especiales. | Archivos .XML individuales |
+| **`Get-ADOrganizationalUnitDN`** | Extrae el *DistinguishedName* (DN) de las Unidades Organizativas y sus sub-OUs de forma jerárquica. | CSV en `C:\` |
+| **`Get-ComputerInfoFromADandIntune`** | **Script Híbrido:** Cruza datos de AD e Intune para obtener una visión 360° (SO, último login, usuario primario) de equipos gestionados y no gestionados. | Informe Consolidado |
+| **`get-ComputersInfo`** | Consulta rápida para obtener el inventario básico de todos los equipos registrados en el Directorio Activo. | Consola / Lista de objetos |
+| **`Set-MemberGroupO365`** | Proceso masivo que lee un `.txt` de equipos y los añade a un grupo de seguridad de AD, validando la existencia previa de cada objeto. | Log en pantalla (Éxito/Error) |
 
 ## 🛠️ Requisitos Especiales
 
