@@ -1,111 +1,38 @@
-# 📁 Libreta de Direcciones Corporativa (GAL Sync)
+# 📧 Exchange Online & Microsoft Graph Management
 
-Este repositorio contiene tres scripts de PowerShell diseñados para gestionar la libreta de direcciones corporativa (GAL) en entornos Microsoft 365 mediante Microsoft Graph API.
+Este directorio contiene scripts avanzados de PowerShell que interactúan con **Microsoft Graph API** para la gestión automatizada de contactos, sincronización de la Global Address List (GAL) y mantenimiento de buzones en entornos Microsoft 365.
 
-## 🎯 Objetivo
+## 🚀 Scripts de Gestión de Contactos
 
-Automatizar la sincronización, actualización y limpieza de contactos corporativos en la libreta de direcciones de los usuarios licenciados del tenant.
+Muchos de estos scripts utilizan lógica basada en atributos personalizados (`extensionAttribute`) para segmentar a qué usuarios aplicar las políticas de sincronización.
 
----
+| Script | Funcionalidad Principal | Segmentación |
+| :--- | :--- | :--- |
+| **`Sync-M365UserContacts`** | **Sincronización Completa:** Crea, actualiza y elimina contactos de otros miembros del dominio. | `extensionAttribute15 = 1` |
+| **`Add-contactsGAL`** | Añade masivamente a los usuarios con licencia como contactos personales de los demás miembros. | Usuarios "Member" con licencia |
+| **`Update-GAL-User`** | Mantiene actualizada la libreta de un usuario objetivo, gestionando duplicados y caracteres especiales (UTF-8). | Atributo personalizado |
+| **`Clean-AADContactsMasive`** | Limpieza masiva de contactos obsoletos basada en el estado de la licencia y teléfono válido. | `extensionAttribute8 = 1` |
+| **`Remove-InvalidContacts`** | Identifica y elimina contactos del dominio `@dominio.com` que ya no existen en Azure AD. | `extensionAttribute8 = 1` |
+| **`Delete-ContactsUser`** | Purga total: elimina todos los contactos de un buzón específico, incluyendo carpetas personalizadas. | UPN Específico |
+| **`Get-Contacts`** | Herramienta de auditoría para contar la cantidad de contactos de los usuarios seleccionados. | `extensionAttribute8 = 1` |
+| **`RemoveContact-PerUser`** | Sincronización individual para un UPN, eliminando contactos que ya no están presentes en el Directorio. | UPN Específico |
 
-## 📜 Scripts incluidos
+## ⚙️ Requisitos de Configuración (App Registration)
 
-### `UpdateGAL-User.ps1`
-🔄 **Actualiza la libreta de direcciones de un único usuario.**
+Para que estos scripts funcionen mediante el flujo de **Client Credentials**, debes registrar una aplicación en [Microsoft Entra ID](https://entra.microsoft.com/) con los siguientes permisos de API (Application Permissions):
 
-- Ideal para pruebas unitarias o validaciones antes de aplicar cambios masivos.
-- Crea o actualiza contactos corporativos en la carpeta principal del usuario especificado.
-- Elimina contactos duplicados y aquellos que ya no están en la lista de usuarios válidos.
-- Mantiene la codificación UTF-8 para preservar caracteres especiales.
+* `User.Read.All`
+* `Contacts.ReadWrite`
+* `Organization.Read.All` (opcional para algunos reportes)
 
----
+> [!IMPORTANT]  
+> Recuerda configurar correctamente el `ClientID`, `TenantID` y `ClientSecret` dentro de los scripts o como variables de entorno.
 
-### `Delete-ContactsUser.ps1`
-🗑 **Elimina todos los contactos de la carpeta principal de un usuario.**
+## 💡 Detalles de Implementación
 
-- Útil para limpiar la libreta de direcciones antes de una sincronización completa.
-- Requiere el UPN del usuario objetivo.
-- Elimina contactos de todas las carpetas, incluyendo personalizadas.
-
----
-
-### `Add-ContactsGAL.ps1`
-➕ **Añade contactos corporativos a todos los usuarios licenciados.**
-
-- Obtiene todos los usuarios de tipo "Member" con licencias asignadas.
-- Añade como contactos a los demás usuarios con licencia, si aún no existen en su libreta.
-- Evita duplicados y mantiene la libreta actualizada.
+* **Soporte UTF-8:** Scripts como `Update-GAL-User` están optimizados para preservar caracteres especiales (acentos, "ñ"), evitando la corrupción de nombres en la agenda.
+* **Optimización de API:** Se incluyen filtros de OData para recuperar solo usuarios con licencias activas, reduciendo el consumo de cuota de la API y mejorando la velocidad.
+* **Mantenimiento Híbrido:** Uso de `onPremisesExtensionAttributes` para entornos que sincronizan atributos desde AD local.
 
 ---
-
-### `Clean-AddContactsMasive.ps1`
-🧹 **Sincroniza contactos para usuarios con `extensionAttribute8 = "1"`.**
-
-- Filtra usuarios destino mediante el atributo personalizado.
-- Elimina contactos obsoletos que ya no están en Azure AD.
-- Mantiene actualizada la libreta de direcciones de cada usuario destino.
-
----
-
-### `RemoveContact-PerUser.ps1`
-🧼 **Limpia y sincroniza contactos para un usuario específico.**
-
-- Filtra usuarios con licencia y teléfono válido.
-- Elimina contactos del usuario objetivo que ya no están en Azure AD.
-- Útil para mantener la libreta de direcciones individual actualizada.
-
----
-
-### `Sync-m365UserContacts.ps1`
-🔁 **Sincroniza contactos de forma completa para múltiples usuarios.**
-
-- Identifica usuarios destino con `extensionAttribute8 = "1"`.
-- Construye la lista de contactos a partir de usuarios con licencia y teléfono.
-- Para cada usuario destino:
-  - Crea nuevos contactos si no existen.
-  - Actualiza contactos ya existentes.
-  - Elimina contactos duplicados.
-
----
-
-### `Get-Contacts.ps1`
-📊 **Consulta la cantidad de contactos por usuario.**
-
-- Filtra usuarios con `extensionAttribute8 = "1"`.
-- Muestra en consola el número de contactos por usuario.
-- Permite exportar los resultados a CSV para análisis posterior.
-## 🛠 Requisitos
-
-- PowerShell 5.1 o superior.
-- Aplicación registrada en Azure AD con permisos:
-  - `Contacts.ReadWrite`
-  - `User.Read.All`
-- Variables de entorno configuradas:
-  - `clientId`
-  - `clientSecret`
-  - `tenantId`
-
----
-
-## 📌 Notas
-
-- Todos los scripts utilizan Microsoft Graph API vía `Invoke-RestMethod` o `Invoke-WebRequest`.
-- Se recomienda ejecutar primero `Delete-ContactsUser.ps1` antes de aplicar `Add-ContactsGAL.ps1` para evitar duplicados.
-
----
-
-
-## 📜 Scripts
-<!-- SCRIPTS_SECTION_START -->
-### 📜 Scripts en ExchangeOnline
-
-- **Sync-M365UserContacts.ps1** → (sin descripción)
-- **RemoveContact-PerUser.ps1** → (sin descripción)
-- **Get-Contacts.ps1** → (sin descripción)
-- **Clean-AADContactsMasive.ps1** → (sin descripción)
-- **Add-contactsGAL.ps1** → (sin descripción)
-- **Remove-InvalidContacts.ps1** → (sin descripción)
-- **Delete-ContactsUser.ps1** → (sin descripción)
-- **Update-GAL-User.ps1** → (sin descripción)
-
-<!-- SCRIPTS_SECTION_END -->
+[⬅️ Volver al Panel Principal](https://github.com/cinqueles09/PowerShell-Device-Management)
