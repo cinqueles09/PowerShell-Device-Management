@@ -1,4 +1,8 @@
 # 📧 Exchange Online & Microsoft Graph Management
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
+[![Microsoft Graph](https://img.shields.io/badge/Microsoft%20Graph-API-573EBF?style=flat&logo=microsoftgraph&logoColor=white)](https://learn.microsoft.com/graph/overview)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
 
 Este directorio contiene scripts avanzados de PowerShell que interactúan con **Microsoft Graph API** para la gestión automatizada de contactos, sincronización de la Global Address List (GAL) y mantenimiento de buzones en entornos Microsoft 365.
 
