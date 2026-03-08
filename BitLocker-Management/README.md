@@ -3,6 +3,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.x-blue.svg)](https://microsoft.com/powershell)
 [![Azure AD](https://img.shields.io/badge/Azure%20AD-Escrow-0078D4?style=flat&logo=microsoft-azure&logoColor=white)](https://learn.microsoft.com/en-us/windows/security/information-protection/bitlocker/bitlocker-management-for-enterprises)
 [![Maintainer](https://img.shields.io/badge/Maintainer-cinqueles09-orange)](https://github.com/cinqueles09)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Este directorio contiene herramientas para la gestión del cifrado de unidad BitLocker, asegurando que las claves de recuperación estén correctamente respaldadas en la nube y que los dispositivos cumplan con los estándares de seguridad organizacional.
 
