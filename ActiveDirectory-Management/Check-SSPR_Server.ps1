@@ -9,7 +9,7 @@
 
 .NOTES
     Autor: Ismael Morilla Orellana
-    Versión: 2.0.1
+    Versión: 2.0.8
     Fecha: 06/05/2026
     Requiere: PowerShell 5.1 o superior y privilegios de Administrador.
 #>
@@ -195,7 +195,7 @@ function Discover-ServiceBusNamespaces {
     return $results | Group-Object NamespaceFqdn | ForEach-Object { $_.Group | Select-Object -First 1 }
 }
 
-# -------------------- NUEVA FUNCIÓN: ADSync Password Writeback --------------------
+# -------------------- FUNCIÓN: ADSync Password Writeback --------------------
 
 function Get-PasswordWritebackStatus {
     param([string]$ConnectorId)
@@ -216,7 +216,6 @@ function Get-PasswordWritebackStatus {
         Error             = $null
     }
 
-    # Verificar si el módulo ADSync está disponible
     if (-not (Get-Module -Name ADSync -ListAvailable -ErrorAction SilentlyContinue)) {
         $result.Error = "Módulo ADSync no disponible en este equipo. Ejecutar en el servidor de Entra Connect."
         return $result
@@ -230,7 +229,6 @@ function Get-PasswordWritebackStatus {
         return $result
     }
 
-    # Obtener el conector AAD por GUID
     try {
         $connector = Get-ADSyncConnector -ErrorAction Stop | Where-Object { $_.Identifier -eq $ConnectorId }
 
@@ -247,11 +245,9 @@ function Get-PasswordWritebackStatus {
         return $result
     }
 
-    # Obtener configuración de Password Reset para el conector
     try {
         $pwConfig = Get-ADSyncAADPasswordResetConfiguration -Connector $connector.Name -ErrorAction Stop
 
-        # --- Enabled ---
         $result.Enabled = $pwConfig.Enabled
         if ($pwConfig.Enabled -eq $true) {
             $result.EnabledStatus = "HABILITADO"
@@ -264,18 +260,14 @@ function Get-PasswordWritebackStatus {
             $result.EnabledColor  = "Yellow"
         }
 
-        # --- Timestamp modificación ---
         $result.ModifiedTimestamp = $pwConfig.ModifiedTimestamp
         if ($pwConfig.ModifiedTimestamp) {
             $age = (Get-Date) - $pwConfig.ModifiedTimestamp
             $result.ModifiedAge = "{0}d {1}h {2}m" -f [int]$age.TotalDays, $age.Hours, $age.Minutes
         }
 
-        # --- Estado del servicio ---
         $result.ServiceStatus   = $pwConfig.ServiceStatus
         $result.ServiceStatusOk = ($pwConfig.ServiceStatus -eq "Started")
-
-        # --- Onboarding ---
         $result.OnboardingStatus = $pwConfig.OnboardingRequiredStatus
 
     } catch {
@@ -285,9 +277,82 @@ function Get-PasswordWritebackStatus {
     return $result
 }
 
-# -------------------- Ejecución Principal --------------------
+# ==================== EJECUCIÓN PRINCIPAL ====================
+
+# -------------------- BANNER VISUAL --------------------
+
+Clear-Host
 
 $isAdmin = Test-IsAdmin
+
+$Banner = @"
+********************************************************************************
+*                                                                              *
+*        MICROSOFT ENTRA CONNECT - SSPR DIAGNOSTIC TOOL v2.3                  *
+*        Análisis de Sincronización, Red, TLS y Service Bus                    *
+*                                                                              *
+********************************************************************************
+"@
+
+Write-Host $Banner -ForegroundColor Cyan
+Write-Host " [SISTEMA] Equipo    : $env:COMPUTERNAME"
+Write-Host " [SESION]  Privilegios: $(if($isAdmin){'ADMIN OK'}else{'LIMITADO'})" -ForegroundColor $(if($isAdmin){'Green'}else{'Yellow'})
+Write-Host " [FECHA]   Inicio    : $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')"
+Write-Host "--------------------------------------------------------------------------------`n"
+
+if (-not $isAdmin) {
+    Write-Host " [!] ERROR CRÍTICO: Se requiere ejecutar como Administrador." -ForegroundColor Red
+    return
+}
+
+# -------------------- 0. VALIDACIÓN DE SOFTWARE Y CONFIGURACIÓN --------------------
+
+Write-Host "[+] VALIDACIÓN DE SOFTWARE Y CONFIGURACIÓN" -ForegroundColor Cyan
+
+# Versión de Microsoft Entra Connect
+$entraVersion = "No detectada"
+try {
+    $inventory = Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue
+    foreach ($item in $inventory) {
+        $properties = $item.PSObject.Properties.Name
+        if ($properties -contains "DisplayName" -and $item.DisplayName -eq "Microsoft Entra Connect Sync") {
+            $entraVersion = $item.DisplayVersion
+            break
+        }
+    }
+} catch {
+    $entraVersion = "Error en consulta"
+}
+Write-Host " - Versión Entra Connect : $entraVersion" -ForegroundColor White
+
+# Estado rápido de ADSync / Password Writeback
+try {
+    if (Get-Module -ListAvailable -Name ADSync) {
+        if (-not (Get-Module -Name ADSync)) { Import-Module ADSync }
+
+        $azureConnector = Get-ADSyncConnector | Where-Object { $_.Type -match "Azure Active Directory|Extra" }
+
+        if ($azureConnector) {
+            $pwdConfig    = Get-ADSyncAADPasswordResetConfiguration -Connector $azureConnector.Name
+            $statusColor  = if ($pwdConfig.Enabled) { "Green" } else { "Red" }
+            Write-Host " - SSPR Habilitado (PW)  : $($pwdConfig.Enabled)"           -ForegroundColor $statusColor
+            Write-Host " - Estado del Servicio   : $($pwdConfig.ServiceStatus)"
+            Write-Host " - Última Modificación   : $($pwdConfig.ModifiedTimestamp)"
+            Write-Host " - Onboarding Status     : $($pwdConfig.OnboardingRequiredStatus)"
+        } else {
+            Write-Host " [!] No se encontró conector de tipo Azure AD." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host " [!] Módulo ADSync no disponible." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host " [!] Error ADSync: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# -------------------- Preparar rutas de reporte --------------------
+
 $reportPath = "C:\ProgramData\SSPR-Diag"
 Ensure-Directory $reportPath
 
@@ -295,17 +360,12 @@ $fileDate = Get-Date -Format "yyyyMMdd_HHmmss"
 $logTxt   = Join-Path $reportPath "SSPR_Diagnostic_$fileDate.txt"
 $logJson  = Join-Path $reportPath "SSPR_Diagnostic_$fileDate.json"
 
-Write-Host "`n[#] SSPR / Entra Connect - Herramienta de Diagnóstico de Red" -ForegroundColor Cyan
-Write-Host "------------------------------------------------------------"
-Write-Host "Servidor: $env:COMPUTERNAME"
-$adminColor = if($isAdmin){'Green'}else{'Yellow'}
-Write-Host "Privilegios: $(if($isAdmin){'Admin OK'}else{'LIMITADO'})" -ForegroundColor $adminColor
+# -------------------- 1. DESCUBRIMIENTO DE NAMESPACES --------------------
 
-# 1. Descubrimiento
-$detectedNs = Discover-ServiceBusNamespaces -Days $DaysBack -Limit $MaxEvents
+$detectedNs  = Discover-ServiceBusNamespaces -Days $DaysBack -Limit $MaxEvents
 $uniqueFqdns = New-Object System.Collections.Generic.List[string]
 
-if ($detectedNs) { 
+if ($detectedNs) {
     $detectedNs.NamespaceFqdn | ForEach-Object { $uniqueFqdns.Add($_) }
 }
 
@@ -314,10 +374,10 @@ if (-not [string]::IsNullOrWhiteSpace($AddNamespace)) {
     if ($uniqueFqdns -notcontains $manual) { $uniqueFqdns.Add($manual) }
 }
 
-# 2. Pruebas de conectividad
+# -------------------- 2. PRUEBAS DE CONECTIVIDAD --------------------
+
 $globalTests = @()
 $globalTests += Test-NetworkEndpoint -Target "passwordreset.microsoftonline.com" -Port 443
-#$globalTests += Test-NetworkEndpoint -Target "servicebus.windows.net" -Port 443
 
 $nsTcpTests  = @()
 $nsHttpTests = @()
@@ -325,47 +385,47 @@ $nsSbPorts   = @()
 
 foreach ($fqdn in $uniqueFqdns) {
     Write-Host "[>] Analizando namespace: $fqdn..." -ForegroundColor Gray
-    $nsTcpTests  += Test-NetworkEndpoint -Target $fqdn -Port 443
+    $nsTcpTests  += Test-NetworkEndpoint  -Target $fqdn -Port 443
     $nsHttpTests += Test-ServiceBusHealth -Uri "https://$fqdn/"
     9350..9354 | ForEach-Object { $nsSbPorts += Test-NetworkEndpoint -Target $fqdn -Port $_ }
 }
 
-# 3. Protocolos y Sistema
+# -------------------- 3. PROTOCOLOS Y SISTEMA --------------------
+
 $tlsClient = Get-Tls12Config -Role "Client"
 $tlsServer = Get-Tls12Config -Role "Server"
 $proxyData = Get-WinHttpProxy
 $dotnet    = Get-DotNetStatus
 
-# 4. Estado Password Writeback (ADSync)
-Write-Host "`n[>] Consultando estado de Password Writeback (ADSync)..." -ForegroundColor Gray
+# -------------------- 4. ESTADO DETALLADO PASSWORD WRITEBACK (ADSync) --------------------
+
+Write-Host "`n[>] Consultando estado detallado de Password Writeback (ADSync)..." -ForegroundColor Gray
 $pwbStatus = Get-PasswordWritebackStatus -ConnectorId $AADConnectorId
 
-# -------------------- Presentación de Resultados --------------------
+# ==================== PRESENTACIÓN DE RESULTADOS ====================
 
 Write-Host "`n[+] RESULTADOS DE CONECTIVIDAD" -ForegroundColor Cyan
 foreach ($test in $globalTests) {
-    $statusText = if($test.Success){"PASSED"}else{"FAILED"}
-    $color = if($test.Success){"Green"}else{"Red"}
+    $statusText = if ($test.Success) { "PASSED" } else { "FAILED" }
+    $color      = if ($test.Success) { "Green"  } else { "Red"    }
     Write-Host (" - {0}:443 -> {1}" -f $test.Target, $statusText) -ForegroundColor $color
 }
 
 if ($uniqueFqdns.Count -gt 0) {
     Write-Host "`n[+] NAMESPACES DETECTADOS" -ForegroundColor Cyan
     foreach ($test in $nsTcpTests) {
-        $statusText = if($test.Success){"OK"}else{"FAIL"}
+        $statusText = if ($test.Success) { "OK" } else { "FAIL" }
         Write-Host (" - {0} (TCP 443): {1}" -f $test.Target, $statusText)
     }
 }
 
 Write-Host "`n[+] CONFIGURACIÓN LOCAL" -ForegroundColor Cyan
-Write-Host (" - TLS 1.2 Client: {0}" -f $tlsClient.Note)
-Write-Host (" - TLS 1.2 Server: {0}" -f $tlsServer.Note)
-Write-Host (" - .NET Framework: {0}" -f $dotnet.Description)
-
-# -------------------- NUEVO BLOQUE: Password Writeback --------------------
+Write-Host (" - TLS 1.2 Client : {0}" -f $tlsClient.Note)
+Write-Host (" - TLS 1.2 Server : {0}" -f $tlsServer.Note)
+Write-Host (" - .NET Framework : {0}" -f $dotnet.Description)
 
 Write-Host "`n[+] PASSWORD WRITEBACK - ESTADO DEL CONECTOR AAD" -ForegroundColor Cyan
-Write-Host ("    Connector ID : {0}" -f $AADConnectorId)
+Write-Host ("    Connector ID  : {0}" -f $AADConnectorId)
 
 if (-not $pwbStatus.Available) {
     Write-Host ("    [!] {0}" -f $pwbStatus.Error) -ForegroundColor Yellow
@@ -374,39 +434,36 @@ if (-not $pwbStatus.Available) {
     Write-Host ("    [!] {0}" -f $pwbStatus.Error) -ForegroundColor Red
 
 } elseif ($pwbStatus.Error) {
-    Write-Host ("    Conector     : {0}" -f $pwbStatus.ConnectorName)
-    Write-Host ("    [!] Error    : {0}" -f $pwbStatus.Error) -ForegroundColor Red
+    Write-Host ("    Conector      : {0}" -f $pwbStatus.ConnectorName)
+    Write-Host ("    [!] Error     : {0}" -f $pwbStatus.Error) -ForegroundColor Red
 
 } else {
-    Write-Host ("    Conector     : {0}" -f $pwbStatus.ConnectorName)
+    Write-Host ("    Conector      : {0}" -f $pwbStatus.ConnectorName)
 
-    # Enabled
     $enabledColor = $pwbStatus.EnabledColor
-    Write-Host ("    Enabled      : {0}" -f $pwbStatus.EnabledStatus) -ForegroundColor $enabledColor
+    Write-Host ("    Enabled       : {0}" -f $pwbStatus.EnabledStatus) -ForegroundColor $enabledColor
 
-    # Fecha de modificación
     if ($pwbStatus.ModifiedTimestamp) {
-        Write-Host ("    Modificado   : {0}  (hace {1})" -f $pwbStatus.ModifiedTimestamp.ToString("dd/MM/yyyy HH:mm:ss"), $pwbStatus.ModifiedAge)
+        Write-Host ("    Modificado    : {0}  (hace {1})" -f $pwbStatus.ModifiedTimestamp.ToString("dd/MM/yyyy HH:mm:ss"), $pwbStatus.ModifiedAge)
     } else {
-        Write-Host "    Modificado   : No disponible" -ForegroundColor Yellow
+        Write-Host "    Modificado    : No disponible" -ForegroundColor Yellow
     }
 
-    # ServiceStatus
     $svcColor = if ($pwbStatus.ServiceStatusOk) { "Green" } else { "Red" }
-    $svcLabel = if ($pwbStatus.ServiceStatusOk) { "OK" } else { "REVISAR" }
-    Write-Host ("    ServiceStatus: {0}  [{1}]" -f $pwbStatus.ServiceStatus, $svcLabel) -ForegroundColor $svcColor
+    $svcLabel = if ($pwbStatus.ServiceStatusOk) { "OK"    } else { "REVISAR" }
+    Write-Host ("    ServiceStatus : {0}  [{1}]" -f $pwbStatus.ServiceStatus, $svcLabel) -ForegroundColor $svcColor
 
-    # Onboarding
-    Write-Host ("    Onboarding   : {0}" -f $pwbStatus.OnboardingStatus)
+    Write-Host ("    Onboarding    : {0}" -f $pwbStatus.OnboardingStatus)
 }
 
-# -------------------- Generación de Reportes --------------------
+# ==================== GENERACIÓN DE REPORTES ====================
 
 $reportData = [ordered]@{
     Metadata = @{
-        Timestamp = Get-Date -Format "o"
-        Host      = $env:COMPUTERNAME
-        IsAdmin   = $isAdmin
+        Timestamp      = Get-Date -Format "o"
+        Host           = $env:COMPUTERNAME
+        IsAdmin        = $isAdmin
+        EntraVersion   = $entraVersion
     }
     Discovery = @{
         Count = $uniqueFqdns.Count
@@ -443,6 +500,7 @@ $reportData | ConvertTo-Json -Depth 10 | Out-File $logJson -Encoding UTF8
 $txtBuilder = New-Object System.Collections.Generic.List[string]
 $txtBuilder.Add("DIAGNÓSTICO SSPR - $env:COMPUTERNAME")
 $txtBuilder.Add("="*40)
+$txtBuilder.Add("Versión Entra Connect: $entraVersion")
 $txtBuilder.Add("Namespaces: $($uniqueFqdns -join ', ')")
 $txtBuilder.Add("TLS 1.2 Client: $($tlsClient.IsEnabled)")
 $txtBuilder.Add("TLS 1.2 Server: $($tlsServer.IsEnabled)")
@@ -459,8 +517,8 @@ $txtBuilder.Add("Onboarding    : $($pwbStatus.OnboardingStatus)")
 if ($pwbStatus.Error) { $txtBuilder.Add("Error         : $($pwbStatus.Error)") }
 $txtBuilder.Add("")
 $txtBuilder.Add("Detalle de conectividad:")
-($globalTests + $nsTcpTests) | ForEach-Object { 
-    $txtBuilder.Add(" - $($_.Target):$($_.Port) -> Success:$($_.Success)") 
+($globalTests + $nsTcpTests) | ForEach-Object {
+    $txtBuilder.Add(" - $($_.Target):$($_.Port) -> Success:$($_.Success)")
 }
 
 $txtBuilder | Out-File $logTxt -Encoding UTF8
