@@ -23,7 +23,10 @@ param(
     [int]$MaxEvents = 500,
 
     [Parameter(HelpMessage = "Namespace adicional para pruebas manuales.")]
-    [string]$AddNamespace
+    [string]$AddNamespace,
+
+    [Parameter(HelpMessage = "GUID del conector AAD de Entra Connect para verificar Password Writeback.")]
+    [string]$AADConnectorId = "b891884f-051e-4a83-95af-2544101c9083"
 )
 
 Set-StrictMode -Version Latest
@@ -192,6 +195,96 @@ function Discover-ServiceBusNamespaces {
     return $results | Group-Object NamespaceFqdn | ForEach-Object { $_.Group | Select-Object -First 1 }
 }
 
+# -------------------- NUEVA FUNCIÓN: ADSync Password Writeback --------------------
+
+function Get-PasswordWritebackStatus {
+    param([string]$ConnectorId)
+
+    $result = [pscustomobject]@{
+        Available         = $false
+        ConnectorFound    = $false
+        ConnectorName     = $null
+        ConnectorId       = $ConnectorId
+        Enabled           = $null
+        EnabledStatus     = "Desconocido"
+        EnabledColor      = "Gray"
+        ModifiedTimestamp = $null
+        ModifiedAge       = $null
+        ServiceStatus     = $null
+        ServiceStatusOk   = $false
+        OnboardingStatus  = $null
+        Error             = $null
+    }
+
+    # Verificar si el módulo ADSync está disponible
+    if (-not (Get-Module -Name ADSync -ListAvailable -ErrorAction SilentlyContinue)) {
+        $result.Error = "Módulo ADSync no disponible en este equipo. Ejecutar en el servidor de Entra Connect."
+        return $result
+    }
+
+    try {
+        Import-Module ADSync -ErrorAction Stop
+        $result.Available = $true
+    } catch {
+        $result.Error = "Error al importar módulo ADSync: $($_.Exception.Message)"
+        return $result
+    }
+
+    # Obtener el conector AAD por GUID
+    try {
+        $connector = Get-ADSyncConnector -ErrorAction Stop | Where-Object { $_.Identifier -eq $ConnectorId }
+
+        if (-not $connector) {
+            $result.Error = "No se encontró ningún conector con ID: $ConnectorId"
+            return $result
+        }
+
+        $result.ConnectorFound = $true
+        $result.ConnectorName  = $connector.Name
+
+    } catch {
+        $result.Error = "Error al obtener conectores ADSync: $($_.Exception.Message)"
+        return $result
+    }
+
+    # Obtener configuración de Password Reset para el conector
+    try {
+        $pwConfig = Get-ADSyncAADPasswordResetConfiguration -Connector $connector.Name -ErrorAction Stop
+
+        # --- Enabled ---
+        $result.Enabled = $pwConfig.Enabled
+        if ($pwConfig.Enabled -eq $true) {
+            $result.EnabledStatus = "HABILITADO"
+            $result.EnabledColor  = "Green"
+        } elseif ($pwConfig.Enabled -eq $false) {
+            $result.EnabledStatus = "DESHABILITADO"
+            $result.EnabledColor  = "Red"
+        } else {
+            $result.EnabledStatus = "No determinado"
+            $result.EnabledColor  = "Yellow"
+        }
+
+        # --- Timestamp modificación ---
+        $result.ModifiedTimestamp = $pwConfig.ModifiedTimestamp
+        if ($pwConfig.ModifiedTimestamp) {
+            $age = (Get-Date) - $pwConfig.ModifiedTimestamp
+            $result.ModifiedAge = "{0}d {1}h {2}m" -f [int]$age.TotalDays, $age.Hours, $age.Minutes
+        }
+
+        # --- Estado del servicio ---
+        $result.ServiceStatus   = $pwConfig.ServiceStatus
+        $result.ServiceStatusOk = ($pwConfig.ServiceStatus -eq "Started")
+
+        # --- Onboarding ---
+        $result.OnboardingStatus = $pwConfig.OnboardingRequiredStatus
+
+    } catch {
+        $result.Error = "Error al obtener configuración de Password Reset: $($_.Exception.Message)"
+    }
+
+    return $result
+}
+
 # -------------------- Ejecución Principal --------------------
 
 $isAdmin = Test-IsAdmin
@@ -224,7 +317,7 @@ if (-not [string]::IsNullOrWhiteSpace($AddNamespace)) {
 # 2. Pruebas de conectividad
 $globalTests = @()
 $globalTests += Test-NetworkEndpoint -Target "passwordreset.microsoftonline.com" -Port 443
-$globalTests += Test-NetworkEndpoint -Target "servicebus.windows.net" -Port 443
+#$globalTests += Test-NetworkEndpoint -Target "servicebus.windows.net" -Port 443
 
 $nsTcpTests  = @()
 $nsHttpTests = @()
@@ -242,6 +335,10 @@ $tlsClient = Get-Tls12Config -Role "Client"
 $tlsServer = Get-Tls12Config -Role "Server"
 $proxyData = Get-WinHttpProxy
 $dotnet    = Get-DotNetStatus
+
+# 4. Estado Password Writeback (ADSync)
+Write-Host "`n[>] Consultando estado de Password Writeback (ADSync)..." -ForegroundColor Gray
+$pwbStatus = Get-PasswordWritebackStatus -ConnectorId $AADConnectorId
 
 # -------------------- Presentación de Resultados --------------------
 
@@ -265,6 +362,44 @@ Write-Host (" - TLS 1.2 Client: {0}" -f $tlsClient.Note)
 Write-Host (" - TLS 1.2 Server: {0}" -f $tlsServer.Note)
 Write-Host (" - .NET Framework: {0}" -f $dotnet.Description)
 
+# -------------------- NUEVO BLOQUE: Password Writeback --------------------
+
+Write-Host "`n[+] PASSWORD WRITEBACK - ESTADO DEL CONECTOR AAD" -ForegroundColor Cyan
+Write-Host ("    Connector ID : {0}" -f $AADConnectorId)
+
+if (-not $pwbStatus.Available) {
+    Write-Host ("    [!] {0}" -f $pwbStatus.Error) -ForegroundColor Yellow
+
+} elseif (-not $pwbStatus.ConnectorFound) {
+    Write-Host ("    [!] {0}" -f $pwbStatus.Error) -ForegroundColor Red
+
+} elseif ($pwbStatus.Error) {
+    Write-Host ("    Conector     : {0}" -f $pwbStatus.ConnectorName)
+    Write-Host ("    [!] Error    : {0}" -f $pwbStatus.Error) -ForegroundColor Red
+
+} else {
+    Write-Host ("    Conector     : {0}" -f $pwbStatus.ConnectorName)
+
+    # Enabled
+    $enabledColor = $pwbStatus.EnabledColor
+    Write-Host ("    Enabled      : {0}" -f $pwbStatus.EnabledStatus) -ForegroundColor $enabledColor
+
+    # Fecha de modificación
+    if ($pwbStatus.ModifiedTimestamp) {
+        Write-Host ("    Modificado   : {0}  (hace {1})" -f $pwbStatus.ModifiedTimestamp.ToString("dd/MM/yyyy HH:mm:ss"), $pwbStatus.ModifiedAge)
+    } else {
+        Write-Host "    Modificado   : No disponible" -ForegroundColor Yellow
+    }
+
+    # ServiceStatus
+    $svcColor = if ($pwbStatus.ServiceStatusOk) { "Green" } else { "Red" }
+    $svcLabel = if ($pwbStatus.ServiceStatusOk) { "OK" } else { "REVISAR" }
+    Write-Host ("    ServiceStatus: {0}  [{1}]" -f $pwbStatus.ServiceStatus, $svcLabel) -ForegroundColor $svcColor
+
+    # Onboarding
+    Write-Host ("    Onboarding   : {0}" -f $pwbStatus.OnboardingStatus)
+}
+
 # -------------------- Generación de Reportes --------------------
 
 $reportData = [ordered]@{
@@ -278,15 +413,27 @@ $reportData = [ordered]@{
         List  = $uniqueFqdns
     }
     Connectivity = @{
-        GlobalTests = $globalTests
-        NamespaceTcp = $nsTcpTests
-        NamespaceHttp = $nsHttpTests
+        GlobalTests          = $globalTests
+        NamespaceTcp         = $nsTcpTests
+        NamespaceHttp        = $nsHttpTests
         ServiceBusRelayPorts = $nsSbPorts
     }
     System = @{
-        TLS = @{ Client = $tlsClient; Server = $tlsServer }
-        Proxy = $proxyData
+        TLS    = @{ Client = $tlsClient; Server = $tlsServer }
+        Proxy  = $proxyData
         DotNet = $dotnet
+    }
+    PasswordWriteback = @{
+        ConnectorId       = $pwbStatus.ConnectorId
+        ConnectorName     = $pwbStatus.ConnectorName
+        Enabled           = $pwbStatus.Enabled
+        EnabledStatus     = $pwbStatus.EnabledStatus
+        ModifiedTimestamp = if ($pwbStatus.ModifiedTimestamp) { $pwbStatus.ModifiedTimestamp.ToString("o") } else { $null }
+        ModifiedAge       = $pwbStatus.ModifiedAge
+        ServiceStatus     = $pwbStatus.ServiceStatus
+        ServiceStatusOk   = $pwbStatus.ServiceStatusOk
+        OnboardingStatus  = $pwbStatus.OnboardingStatus
+        Error             = $pwbStatus.Error
     }
 }
 
@@ -301,7 +448,17 @@ $txtBuilder.Add("TLS 1.2 Client: $($tlsClient.IsEnabled)")
 $txtBuilder.Add("TLS 1.2 Server: $($tlsServer.IsEnabled)")
 $txtBuilder.Add(".NET 4.8+: $($dotnet.IsCompliant)")
 $txtBuilder.Add("WinHTTP Proxy: $proxyData")
-$txtBuilder.Add("`nDetalle de conectividad:")
+$txtBuilder.Add("")
+$txtBuilder.Add("--- PASSWORD WRITEBACK ---")
+$txtBuilder.Add("Connector ID  : $($pwbStatus.ConnectorId)")
+$txtBuilder.Add("Connector     : $($pwbStatus.ConnectorName)")
+$txtBuilder.Add("Enabled       : $($pwbStatus.EnabledStatus)")
+$txtBuilder.Add("Modificado    : $($pwbStatus.ModifiedTimestamp) (hace $($pwbStatus.ModifiedAge))")
+$txtBuilder.Add("ServiceStatus : $($pwbStatus.ServiceStatus)")
+$txtBuilder.Add("Onboarding    : $($pwbStatus.OnboardingStatus)")
+if ($pwbStatus.Error) { $txtBuilder.Add("Error         : $($pwbStatus.Error)") }
+$txtBuilder.Add("")
+$txtBuilder.Add("Detalle de conectividad:")
 ($globalTests + $nsTcpTests) | ForEach-Object { 
     $txtBuilder.Add(" - $($_.Target):$($_.Port) -> Success:$($_.Success)") 
 }
