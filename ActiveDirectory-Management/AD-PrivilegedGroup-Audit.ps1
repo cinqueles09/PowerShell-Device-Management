@@ -49,6 +49,7 @@
 
 .NOTES
     Nombre     : Get-ADPrivilegedGroupMembership.ps1
+    Autor      : Ismael Morilla Orellana
     Version    : 1.4.1
     Fecha      : 19/10/2026
     Plataforma : Windows PowerShell 5.1+
