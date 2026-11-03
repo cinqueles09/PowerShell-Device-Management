@@ -12,23 +12,25 @@
     Version: 1.0
 #>
 
-# Deshabilitar Windows Hello para empresas
-$passportKey = "HKLM:\SOFTWARE\Policies\Microsoft\PassportForWork"
-if (!(Test-Path $passportKey)) {
-    New-Item -Path $passportKey -Force | Out-Null
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+
+if ($identity.User.Value -eq "S-1-5-18") {
+    Write-Output "ERROR: No ejecutar como SYSTEM."
+    exit 1
 }
-Set-ItemProperty -Path $passportKey -Name "Enabled" -Value 0
 
-# Eliminar datos biométricos
-$biometricPath = "$env:ProgramData\Microsoft\Biometrics"
-Remove-Item -Path $biometricPath -Recurse -Force -ErrorAction SilentlyContinue
+try {
+    $output = & "$env:SystemRoot\System32\certutil.exe" -DeleteHelloContainer 2>&1
 
-# Detener y deshabilitar servicio biométrico
-Stop-Service -Name "WbioSrvc" -Force -ErrorAction SilentlyContinue
-Set-Service -Name "WbioSrvc" -StartupType Disabled
+    if ($LASTEXITCODE -ne 0) {
+        throw "Error eliminando contenedor: $output"
+    }
 
-# Eliminar claves de PIN del registro
-$pinKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{D6886603-9D2F-4EB2-B667-1971041FA96B}"
-Remove-Item -Path $pinKey -Recurse -Force -ErrorAction SilentlyContinue
-
-Write-Host "Configuracion de Windows Hello eliminada. Reinicia el equipo para aplicar los cambios."
+    Write-Output "REMOVED: Contenedor Windows Hello eliminado."
+    Write-Output "ACTION_REQUIRED: Cerrar sesion y volver a entrar."
+    exit 0
+}
+catch {
+    Write-Output "ERROR: $($_.Exception.Message)"
+    exit 1
+}
